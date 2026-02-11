@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Poem-A-Day</title>
+  </head>
+  <body>
+    <main>
+      <h1 id="poem-title"></h1>
+      <p id="poem-author"></p>
+      <pre id="poem-text"></pre>
+    </main>
+    <script>
+      const poemTitle = document.getElementById("poem-title");
+      const poemAuthor = document.getElementById("poem-author");
+      const poemText = document.getElementById("poem-text");
+
+      fetch("poem.json", { cache: "no-store" })
+        .then((response) => response.json())
+        .then((data) => {
+          if (!data || !data.title || !data.poem) return;
+          poemTitle.textContent = data.title;
+          poemAuthor.textContent = data.author ? `by ${data.author}` : "";
+          poemText.textContent = data.poem;
+        });
+    </script>
+  </body>
+</html>
