@@ -156,23 +156,31 @@ def parse_markdown_page(text: str) -> dict:
     }
 
 
+def extract_poem_url(pod_soup: BeautifulSoup) -> str:
+    pod_main = pod_soup.find("main") or pod_soup.body
+
+    if pod_main:
+        for link in pod_main.find_all("a"):
+            if link.get_text(strip=True).lower() == "read more" and link.get("href"):
+                href = link["href"]
+                return f"{BASE_URL}{href}" if href.startswith("/") else href
+
+        for link in pod_main.find_all("a", href=True):
+            href = link["href"]
+            if "/poems/" in href and "poem-of-the-day" not in href:
+                return f"{BASE_URL}{href}" if href.startswith("/") else href
+
+    return POD_URL
+
+
 def main() -> None:
     pod_html = fetch_html(POD_URL)
     pod_soup = get_soup(pod_html)
-    pod_main = pod_soup.find("main") or pod_soup.body
+    pod_title = ""
+    if pod_soup.title and pod_soup.title.string:
+        pod_title = pod_soup.title.string.split("|", 1)[0].strip()
 
-    read_more = None
-    if pod_main:
-        for link in pod_main.find_all("a"):
-            if link.get_text(strip=True).lower() == "read more":
-                read_more = link
-                break
-
-    poem_url = POD_URL
-    if read_more and read_more.get("href"):
-        poem_url = read_more["href"]
-        if poem_url.startswith("/"):
-            poem_url = f"{BASE_URL}{poem_url}"
+    poem_url = extract_poem_url(pod_soup)
 
     poem_text_raw = fetch_text(poem_url)
     data = parse_markdown_page(poem_text_raw)
@@ -232,6 +240,12 @@ def main() -> None:
             "author": author,
             "poem": poem_text,
         }
+
+    if not data.get("title") and pod_title:
+        data["title"] = pod_title
+
+    if not data.get("poem"):
+        raise RuntimeError("Could not extract poem text; poem.json was not updated.")
 
     OUT_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 

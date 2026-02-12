@@ -19,10 +19,23 @@
       fetch("poem.json", { cache: "no-store" })
         .then((response) => response.json())
         .then((data) => {
-          if (!data || !data.title || !data.poem) return;
-          poemTitle.textContent = data.title;
+          if (!data || !data.poem) {
+            poemTitle.textContent = "Poem unavailable";
+            poemAuthor.textContent = "";
+            poemText.textContent =
+              "Could not load today's poem. Please run the fetch script again.";
+            return;
+          }
+
+          poemTitle.textContent = data.title || "Poem of the Day";
           poemAuthor.textContent = data.author ? `by ${data.author}` : "";
           poemText.textContent = data.poem;
+        })
+        .catch(() => {
+          poemTitle.textContent = "Poem unavailable";
+          poemAuthor.textContent = "";
+          poemText.textContent =
+            "Could not read poem.json. Please regenerate it with the fetch script.";
         });
     </script>
   </body>
