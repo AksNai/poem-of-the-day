@@ -11,6 +11,12 @@ BASE_URL = "https://www.poetryfoundation.org"
 OUT_FILE = Path(__file__).resolve().parents[1] / "poem.json"
 
 
+def build_jina_reader_url(url: str) -> str:
+    # r.jina.ai expects the target without its leading scheme.
+    target = re.sub(r"^https?://", "", url.strip(), flags=re.I)
+    return f"https://r.jina.ai/http://{target}"
+
+
 def clean_text(text: str) -> str:
     lines = [line.strip().replace("\u00a0", " ") for line in text.splitlines()]
     return "\n".join([line for line in lines if line])
@@ -19,7 +25,7 @@ def clean_text(text: str) -> str:
 def fetch_html(url: str) -> str:
     sources = [
         (url, True),
-        (f"https://api.allorigins.win/raw?url={quote(url)}", False),
+        (f"https://api.allorigins.win/raw?url={quote(url, safe='')}", False),
     ]
 
     for source, use_headers in sources:
@@ -42,8 +48,8 @@ def fetch_html(url: str) -> str:
 def fetch_text(url: str) -> str:
     sources = [
         (url, True),
-        (f"https://api.allorigins.win/raw?url={quote(url)}", False),
-        (f"https://r.jina.ai/http://{url}", False),
+        (f"https://api.allorigins.win/raw?url={quote(url, safe='')}", False),
+        (build_jina_reader_url(url), False),
     ]
 
     for source, use_headers in sources:
@@ -64,9 +70,21 @@ def fetch_text(url: str) -> str:
 
 
 def fetch_markdown(url: str) -> str:
-    response = requests.get(f"https://r.jina.ai/http://{url}", timeout=25)
-    response.raise_for_status()
-    return response.text
+    sources = [
+        build_jina_reader_url(url),
+        f"https://api.allorigins.win/raw?url={quote(url, safe='')}",
+    ]
+
+    for source in sources:
+        try:
+            response = requests.get(source, timeout=25)
+            response.raise_for_status()
+            if response.text:
+                return response.text
+        except requests.RequestException:
+            continue
+
+    raise RuntimeError(f"Failed to fetch markdown/text: {url}")
 
 
 def get_soup(html: str) -> BeautifulSoup:
@@ -182,8 +200,13 @@ def main() -> None:
 
     poem_url = extract_poem_url(pod_soup)
 
-    poem_text_raw = fetch_text(poem_url)
-    data = parse_markdown_page(poem_text_raw)
+    poem_text_raw = ""
+    data = {"title": "", "author": "", "poem": ""}
+    try:
+        poem_text_raw = fetch_text(poem_url)
+        data = parse_markdown_page(poem_text_raw)
+    except RuntimeError:
+        pass
 
     if not data.get("poem") or any(
         token in data.get("poem", "")
@@ -192,7 +215,7 @@ def main() -> None:
         try:
             poem_text_raw = fetch_markdown(poem_url)
             data = parse_markdown_page(poem_text_raw)
-        except requests.RequestException:
+        except RuntimeError:
             pass
 
     if (not data.get("poem")) and "<html" in poem_text_raw.lower():
