@@ -95,6 +95,37 @@ def strip_markdown_links(text: str) -> str:
     return re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
 
 
+def normalize_poetryfoundation_url(url: str) -> str:
+    cleaned = re.sub(r"\s+", "", url)
+    cleaned = cleaned.strip("\"'`.,;:!?)[]{}<>")
+    cleaned = re.sub(r"^(https?://www\.poetryfoundation\.org)(?!/)", r"\1/", cleaned, flags=re.I)
+    return cleaned
+
+
+def extract_poem_url_from_text(text: str) -> str:
+    read_more_match = re.search(
+        r"\[\s*Read\s+More\s*\]\(\s*(https?://[^)\s]+)\s*\)",
+        text,
+        flags=re.I,
+    )
+    if read_more_match:
+        candidate = normalize_poetryfoundation_url(read_more_match.group(1))
+        if "poem-of-the-day" not in candidate.lower():
+            return candidate
+
+    poem_link_match = re.search(
+        r"(https?://(?:www\.)?poetryfoundation\.org/(?:poems|poetrymagazine/poems)/\d+[^)\s]*)",
+        text,
+        flags=re.I,
+    )
+    if poem_link_match:
+        candidate = normalize_poetryfoundation_url(poem_link_match.group(1))
+        if "poem-of-the-day" not in candidate.lower():
+            return candidate
+
+    return POD_URL
+
+
 def parse_markdown_page(text: str) -> dict:
     if "Markdown Content:" in text:
         text = text.split("Markdown Content:", 1)[1]
@@ -192,13 +223,36 @@ def extract_poem_url(pod_soup: BeautifulSoup) -> str:
 
 
 def main() -> None:
-    pod_html = fetch_html(POD_URL)
-    pod_soup = get_soup(pod_html)
     pod_title = ""
-    if pod_soup.title and pod_soup.title.string:
-        pod_title = pod_soup.title.string.split("|", 1)[0].strip()
+    poem_url = POD_URL
 
-    poem_url = extract_poem_url(pod_soup)
+    try:
+        pod_html = fetch_html(POD_URL)
+        pod_soup = get_soup(pod_html)
+        if pod_soup.title and pod_soup.title.string:
+            pod_title = pod_soup.title.string.split("|", 1)[0].strip()
+        poem_url = extract_poem_url(pod_soup)
+    except RuntimeError:
+        pod_text = fetch_text(POD_URL)
+        heading_match = re.search(r"^(.+?)\n=+", pod_text, flags=re.M)
+        if heading_match:
+            pod_title = strip_markdown_links(heading_match.group(1)).strip()
+            if " | " in pod_title:
+                pod_title = pod_title.split(" | ", 1)[0].strip()
+        poem_url = extract_poem_url_from_text(pod_text)
+
+    if poem_url == POD_URL:
+        try:
+            pod_text = fetch_markdown(POD_URL)
+            poem_url = extract_poem_url_from_text(pod_text)
+            if not pod_title:
+                heading_match = re.search(r"^(.+?)\n=+", pod_text, flags=re.M)
+                if heading_match:
+                    pod_title = strip_markdown_links(heading_match.group(1)).strip()
+                    if " | " in pod_title:
+                        pod_title = pod_title.split(" | ", 1)[0].strip()
+        except RuntimeError:
+            pass
 
     poem_text_raw = ""
     data = {"title": "", "author": "", "poem": ""}
