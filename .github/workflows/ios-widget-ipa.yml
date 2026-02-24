@@ -1,0 +1,172 @@
+name: Build iOS Widget IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_path:
+        description: "Path to .xcodeproj (leave empty to auto-detect or generate from project.yml)"
+        required: false
+        type: string
+      scheme:
+        description: "Shared scheme to build (leave empty to auto-detect first shared scheme)"
+        required: false
+        type: string
+      generate_from_xcodegen:
+        description: "Generate .xcodeproj from project.yml"
+        required: false
+        default: true
+        type: boolean
+      configuration:
+        description: "Build configuration"
+        required: false
+        default: "Release"
+        type: choice
+        options:
+          - Release
+          - Debug
+
+permissions:
+  contents: read
+
+jobs:
+  build-unsigned-ipa:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        if: ${{ inputs.generate_from_xcodegen }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install xcodegen
+
+      - name: Resolve project and scheme
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROJECT_INPUT="${{ inputs.project_path }}"
+          SCHEME_INPUT="${{ inputs.scheme }}"
+          CONFIGURATION="${{ inputs.configuration }}"
+          GENERATE_FROM_XCODEGEN="${{ inputs.generate_from_xcodegen }}"
+
+          if [[ -n "$PROJECT_INPUT" ]]; then
+            PROJECT_PATH="$PROJECT_INPUT"
+            if [[ ! -f "$PROJECT_PATH" ]]; then
+              echo "Provided project_path does not exist: $PROJECT_PATH"
+              exit 1
+            fi
+          else
+            if [[ "$GENERATE_FROM_XCODEGEN" == "true" && -f "project.yml" ]]; then
+              xcodegen generate
+            fi
+
+            mapfile -t projects < <(find . -name "*.xcodeproj" -not -path "*/Pods/*" | sort)
+            if [[ ${#projects[@]} -eq 0 ]]; then
+              echo "No .xcodeproj found. Add one or include project.yml and enable generate_from_xcodegen."
+              exit 1
+            fi
+            PROJECT_PATH="${projects[0]}"
+          fi
+
+          if [[ -n "$SCHEME_INPUT" ]]; then
+            SCHEME="$SCHEME_INPUT"
+          else
+            SCHEME=$(xcodebuild -list -json -project "$PROJECT_PATH" | python3 -c 'import json,sys; data=json.load(sys.stdin); schemes=(data.get("project") or {}).get("schemes") or []; app=[s for s in schemes if not s.lower().endswith("extension")]; print((app or schemes or [""])[0])')
+            if [[ -z "$SCHEME" ]]; then
+              echo "No shared schemes found for project: $PROJECT_PATH"
+              echo "Make sure your target scheme is marked as Shared in Xcode."
+              exit 1
+            fi
+          fi
+
+          APP_NAME=$(basename "$PROJECT_PATH" .xcodeproj)
+
+          echo "project_path=$PROJECT_PATH" >> "$GITHUB_OUTPUT"
+          echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
+          echo "configuration=$CONFIGURATION" >> "$GITHUB_OUTPUT"
+          echo "app_name=$APP_NAME" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### iOS build inputs"
+            echo "- Project: \`$PROJECT_PATH\`"
+            echo "- Scheme: \`$SCHEME\`"
+            echo "- Configuration: \`$CONFIGURATION\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build app for iPhoneOS (unsigned)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROJECT_PATH="${{ steps.resolve.outputs.project_path }}"
+          SCHEME="${{ steps.resolve.outputs.scheme }}"
+          CONFIGURATION="${{ steps.resolve.outputs.configuration }}"
+
+          xcodebuild \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            clean build
+
+      - name: Package unsigned IPA
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CONFIGURATION="${{ steps.resolve.outputs.configuration }}"
+          APP_NAME="${{ steps.resolve.outputs.app_name }}"
+
+          APP_DIR="build/DerivedData/Build/Products/${CONFIGURATION}-iphoneos"
+
+          if [[ ! -d "$APP_DIR" ]]; then
+            echo "Expected build output directory not found: $APP_DIR"
+            exit 1
+          fi
+
+          APP_PATH=""
+          if [[ -d "$APP_DIR/${APP_NAME}.app" ]]; then
+            APP_PATH="$APP_DIR/${APP_NAME}.app"
+          else
+            APP_PATH=$(find "$APP_DIR" -maxdepth 1 -name "*.app" | head -n 1 || true)
+          fi
+
+          if [[ -z "$APP_PATH" ]]; then
+            echo "No .app found in $APP_DIR"
+            ls -la "$APP_DIR"
+            exit 1
+          fi
+
+          mkdir -p build/Payload
+          cp -R "$APP_PATH" build/Payload/
+
+          IPA_NAME="${APP_NAME}-unsigned-${GITHUB_RUN_NUMBER}.ipa"
+          (cd build && zip -qry "$IPA_NAME" Payload)
+
+          echo "ipa_path=build/$IPA_NAME" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Output"
+            echo "- IPA artifact: \`$IPA_NAME\`"
+            echo "- App bundle: \`$(basename "$APP_PATH")\`"
+            echo ""
+            echo "This IPA is unsigned and intended for AltStore signing/install flow."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-widget-ipa
+          path: ${{ steps.package.outputs.ipa_path }}
+          if-no-files-found: error

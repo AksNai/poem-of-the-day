@@ -16,6 +16,17 @@
       const poemAuthor = document.getElementById("poem-author");
       const poemText = document.getElementById("poem-text");
 
+      function renderPoem(poem) {
+        const escaped = poem
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;");
+
+        return escaped
+          .replace(/(^|[^\w])_([^_\n]+)_([^\w]|$)/g, "$1<em>$2</em>$3")
+          .replace(/(^|[^\w])\*([^*\n]+)\*([^\w]|$)/g, "$1<em>$2</em>$3");
+      }
+
       fetch("poem.json", { cache: "no-store" })
         .then((response) => response.json())
         .then((data) => {
@@ -29,7 +40,7 @@
 
           poemTitle.textContent = data.title || "Poem of the Day";
           poemAuthor.textContent = data.author ? `by ${data.author}` : "";
-          poemText.textContent = data.poem;
+          poemText.innerHTML = renderPoem(data.poem);
         })
         .catch(() => {
           poemTitle.textContent = "Poem unavailable";

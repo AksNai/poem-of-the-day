@@ -18,8 +18,12 @@ def build_jina_reader_url(url: str) -> str:
 
 
 def clean_text(text: str) -> str:
-    lines = [line.strip().replace("\u00a0", " ") for line in text.splitlines()]
-    return "\n".join([line for line in lines if line])
+    return (
+        text.replace("\u00a0", " ")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .strip("\n")
+    )
 
 
 def fetch_html(url: str) -> str:
@@ -102,15 +106,33 @@ def normalize_poetryfoundation_url(url: str) -> str:
     return cleaned
 
 
+def is_poetryfoundation_poem_url(url: str) -> bool:
+    lowered = url.lower()
+    if "poem-of-the-day" in lowered:
+        return False
+    return bool(
+        re.search(
+            r"^https?://(?:www\.)?poetryfoundation\.org/(?:poems|poetrymagazine/poems)/\d+",
+            url,
+            flags=re.I,
+        )
+    )
+
+
 def extract_poem_url_from_text(text: str) -> str:
     read_more_match = re.search(
-        r"\[\s*Read\s+More\s*\]\(\s*(https?://[^)\s]+)\s*\)",
+        r"\[\s*Read\s+More\s*\]\(\s*(https?://.*?)\s*\)",
         text,
-        flags=re.I,
+        flags=re.I | re.S,
     )
     if read_more_match:
         candidate = normalize_poetryfoundation_url(read_more_match.group(1))
-        if "poem-of-the-day" not in candidate.lower():
+        if is_poetryfoundation_poem_url(candidate):
+            return candidate
+
+    for match in re.finditer(r"\]\(\s*(https?://.*?)\s*\)", text, flags=re.I | re.S):
+        candidate = normalize_poetryfoundation_url(match.group(1))
+        if is_poetryfoundation_poem_url(candidate):
             return candidate
 
     poem_link_match = re.search(
@@ -120,7 +142,7 @@ def extract_poem_url_from_text(text: str) -> str:
     )
     if poem_link_match:
         candidate = normalize_poetryfoundation_url(poem_link_match.group(1))
-        if "poem-of-the-day" not in candidate.lower():
+        if is_poetryfoundation_poem_url(candidate):
             return candidate
 
     return POD_URL
@@ -143,66 +165,82 @@ def parse_markdown_page(text: str) -> dict:
     author = ""
     author_index = -1
     for i, line in enumerate(lines):
-        if line.strip().startswith("By "):
-            author = line.strip()[3:].strip()
+        stripped = line.strip()
+        if stripped == "By":
+            next_non_empty = next((entry.strip() for entry in lines[i + 1 :] if entry.strip()), "")
+            if next_non_empty:
+                author = next_non_empty
+                author_index = i + 1
+                break
+        if stripped.startswith("By "):
+            author = stripped[3:].strip()
             author_index = i
             break
 
     stop_pattern = re.compile(
-        r"^(Poems & Poets|Topics & Themes|Features|Grants & Programs|About Us|Poetry magazine|Subscribe|Related|More by|Advertise|Copyright|Source|Share)\b",
+        r"^(Poems & Poets|Topics & Themes|Features|Grants & Programs|About Us|Poetry magazine|Subscribe|Related|More by|Advertise|Copyright|Source|Share|A note from the editor|Sign Up to Receive|RECENT POEMS OF THE DAY|Poetry Foundation Homepage)\b",
         re.I,
     )
     skip_inline = {"Share", "Play Audio"}
     poem_lines = []
+    content_start = author_index + 1
 
-    if author_index >= 0:
-        for line in lines[author_index + 1 :]:
-            stripped = line.strip()
-            if not poem_lines and (not stripped or stripped in skip_inline):
-                continue
-            if stripped.startswith("[]("):
-                continue
-            if poem_lines and stop_pattern.match(stripped):
+    if author_index < 0:
+        for i in range(len(lines) - 1):
+            current = lines[i].strip()
+            underline = lines[i + 1].strip()
+            if current and underline and set(underline) in ({"="}, {"-"}):
+                content_start = i + 2
                 break
-            poem_lines.append(line)
+
+    for line in lines[content_start:]:
+        stripped = line.strip()
+        if not poem_lines and (not stripped or stripped in skip_inline):
+            continue
+        if stripped.startswith("[]("):
+            continue
+        if poem_lines and stop_pattern.match(stripped):
+            break
+        poem_lines.append(line)
 
     while poem_lines and not poem_lines[0].strip():
         poem_lines.pop(0)
     while poem_lines and not poem_lines[-1].strip():
         poem_lines.pop()
 
-    blank_count = sum(1 for line in poem_lines if not line.strip())
-    if poem_lines and (blank_count / len(poem_lines)) > 0.3:
-        cleaned = []
-        for i, line in enumerate(poem_lines):
-            if not line.strip():
-                prev_non = i > 0 and poem_lines[i - 1].strip()
-                next_non = i + 1 < len(poem_lines) and poem_lines[i + 1].strip()
-                if prev_non and next_non:
-                    continue
-            cleaned.append(line)
-        poem_lines = cleaned
-
-    normalized = []
-    last_blank = False
-    for line in poem_lines:
-        if line.strip():
-            normalized.append(line)
-            last_blank = False
-        elif not last_blank:
-            normalized.append("")
-            last_blank = True
-
-    while normalized and not normalized[0].strip():
-        normalized.pop(0)
-    while normalized and not normalized[-1].strip():
-        normalized.pop()
+    poem = "\n".join(poem_lines)
+    if title.lower() == "poem of the day" and not author:
+        poem = ""
 
     return {
         "title": title,
         "author": author,
-        "poem": "\n".join(normalized).strip(),
+        "poem": poem,
     }
+
+
+def is_valid_poem_content(data: dict) -> bool:
+    poem = (data.get("poem") or "").strip()
+    if not poem:
+        return False
+
+    title = (data.get("title") or "").strip().lower()
+    author = (data.get("author") or "").strip()
+    if title == "poem of the day" and not author:
+        return False
+
+    if len(poem) > 20000 or poem.count("\n") > 1200:
+        return False
+
+    blocked_tokens = (
+        "window.__NUXT__",
+        "primaryNavigation_Node",
+        "cacheTags",
+        "<script",
+        "Poetry Foundation Homepage",
+        "Sign Up to Receive the Poem of the Day",
+    )
+    return not any(token.lower() in poem.lower() for token in blocked_tokens)
 
 
 def extract_poem_url(pod_soup: BeautifulSoup) -> str:
@@ -262,7 +300,7 @@ def main() -> None:
     except RuntimeError:
         pass
 
-    if not data.get("poem") or any(
+    if not is_valid_poem_content(data) or any(
         token in data.get("poem", "")
         for token in ("Poems & Poets", "Advertise", "PoetryMagazine")
     ):
@@ -301,7 +339,7 @@ def main() -> None:
             if main
             else None
         )
-        poem_text = clean_text(poem_el.get_text("\n", strip=True)) if poem_el else ""
+        poem_text = clean_text(poem_el.get_text("\n", strip=False)) if poem_el else ""
 
         if not poem_text and main:
             paragraphs = [
@@ -318,10 +356,20 @@ def main() -> None:
             "poem": poem_text,
         }
 
+    if not is_valid_poem_content(data):
+        data = {"title": "", "author": "", "poem": ""}
+
     if not data.get("title") and pod_title:
         data["title"] = pod_title
 
     if not data.get("poem"):
+        if OUT_FILE.exists():
+            try:
+                existing = json.loads(OUT_FILE.read_text(encoding="utf-8"))
+                if existing.get("poem"):
+                    return
+            except (json.JSONDecodeError, OSError):
+                pass
         raise RuntimeError("Could not extract poem text; poem.json was not updated.")
 
     OUT_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
