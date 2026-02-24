@@ -65,12 +65,11 @@ jobs:
               xcodegen generate
             fi
 
-            mapfile -t projects < <(find . -name "*.xcodeproj" -not -path "*/Pods/*" | sort)
-            if [[ ${#projects[@]} -eq 0 ]]; then
+            PROJECT_PATH=$(find . -name "*.xcodeproj" -not -path "*/Pods/*" | sort | head -n 1)
+            if [[ -z "$PROJECT_PATH" ]]; then
               echo "No .xcodeproj found. Add one or include project.yml and enable generate_from_xcodegen."
               exit 1
             fi
-            PROJECT_PATH="${projects[0]}"
           fi
 
           if [[ -n "$SCHEME_INPUT" ]]; then
