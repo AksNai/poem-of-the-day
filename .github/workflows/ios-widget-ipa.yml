@@ -147,11 +147,16 @@ jobs:
             exit 1
           fi
 
+          rm -rf build/Payload
           mkdir -p build/Payload
           cp -R "$APP_PATH" build/Payload/
 
           IPA_NAME="${APP_NAME}-unsigned-${GITHUB_RUN_NUMBER}.ipa"
-          (cd build && zip -qry "$IPA_NAME" Payload)
+          (
+            cd build
+            rm -f "$IPA_NAME"
+            ditto -c -k --sequesterRsrc --keepParent Payload "$IPA_NAME"
+          )
 
           echo "ipa_path=build/$IPA_NAME" >> "$GITHUB_OUTPUT"
 
