@@ -25,7 +25,6 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.aksha.poemoftheday
         INFOPLIST_FILE: ios/App/Info.plist
-        CODE_SIGN_ENTITLEMENTS: ios/App/PoemOfTheDay.entitlements
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: ""
@@ -43,7 +42,6 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.aksha.poemoftheday.widget
         INFOPLIST_FILE: ios/Widget/Info.plist
-        CODE_SIGN_ENTITLEMENTS: ios/Widget/PoemWidgetExtension.entitlements
         TARGETED_DEVICE_FAMILY: "1,2"
         SKIP_INSTALL: YES
         APPLICATION_EXTENSION_API_ONLY: YES
