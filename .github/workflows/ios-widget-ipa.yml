@@ -113,9 +113,14 @@ jobs:
             -sdk iphoneos \
             -destination "generic/platform=iOS" \
             -derivedDataPath build/DerivedData \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            VALIDATE_PRODUCT=NO \
+            ENABLE_BITCODE=NO \
             clean build
 
       - name: Package unsigned IPA
@@ -138,34 +143,61 @@ jobs:
           if [[ -d "$APP_DIR/${APP_NAME}.app" ]]; then
             APP_PATH="$APP_DIR/${APP_NAME}.app"
           else
-            APP_PATH=$(find "$APP_DIR" -maxdepth 1 -name "*.app" | head -n 1 || true)
+            APP_PATH=$(find "$APP_DIR" -maxdepth 1 -name "*.app" -type d | head -n 1 || true)
           fi
 
-          if [[ -z "$APP_PATH" ]]; then
+          if [[ -z "$APP_PATH" || ! -d "$APP_PATH" ]]; then
             echo "No .app found in $APP_DIR"
             ls -la "$APP_DIR"
             exit 1
           fi
 
+          echo "=== App bundle contents ==="
+          ls -laR "$APP_PATH/" | head -80
+          echo ""
+
+          if [[ -d "$APP_PATH/PlugIns" ]]; then
+            echo "=== Embedded extensions ==="
+            ls -la "$APP_PATH/PlugIns/"
+            echo ""
+          fi
+
+          # Create clean Payload directory
           rm -rf build/Payload
           mkdir -p build/Payload
           cp -R "$APP_PATH" build/Payload/
 
-          IPA_NAME="${APP_NAME}-unsigned-${GITHUB_RUN_NUMBER}.ipa"
-          (
-            cd build
-            rm -f "$IPA_NAME"
-            ditto -c -k --sequesterRsrc --keepParent Payload "$IPA_NAME"
-          )
+          # Strip ALL code signatures — AltStore will re-sign from scratch
+          find build/Payload -name "_CodeSignature" -type d -exec rm -rf {} + 2>/dev/null || true
+          find build/Payload -name "*.mobileprovision" -delete 2>/dev/null || true
 
-          if ! unzip -l "build/$IPA_NAME" | grep -Eq "Payload/.+\.app/$"; then
-            echo "IPA validation failed: missing Payload/*.app structure"
-            unzip -l "build/$IPA_NAME" || true
+          # Remove macOS metadata junk
+          find build/Payload -name ".DS_Store" -delete 2>/dev/null || true
+          find build/Payload -name "__MACOSX" -type d -exec rm -rf {} + 2>/dev/null || true
+
+          # Use standard zip (most compatible with AltStore on all platforms)
+          cd build
+          rm -f PoemOfTheDay.ipa
+          zip -r -9 PoemOfTheDay.ipa Payload
+
+          echo ""
+          echo "=== IPA contents (first 60 entries) ==="
+          unzip -l PoemOfTheDay.ipa | head -60
+          echo ""
+
+          # Validate: IPA must contain Payload/<name>.app/Info.plist
+          if ! unzip -l PoemOfTheDay.ipa | grep -q "Payload/.*\.app/Info.plist"; then
+            echo "ERROR: IPA missing Payload/*.app/Info.plist"
+            unzip -l PoemOfTheDay.ipa
             exit 1
           fi
 
+          echo "IPA structure validated OK"
+          echo ""
+
+          cd ..
           mkdir -p dist
-          cp "build/$IPA_NAME" "dist/PoemOfTheDay.ipa"
+          cp build/PoemOfTheDay.ipa dist/PoemOfTheDay.ipa
 
           echo "ipa_path=dist/PoemOfTheDay.ipa" >> "$GITHUB_OUTPUT"
 
