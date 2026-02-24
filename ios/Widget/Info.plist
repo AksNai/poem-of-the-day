@@ -21,7 +21,7 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>PoemRemoteURL</key>
-	<string>https://raw.githubusercontent.com/Aksha/PoemOfTheDay/main/poem.json</string>
+	<string>https://raw.githubusercontent.com/AksNai/poem-of-the-day/main/poem.json</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionPointIdentifier</key>
