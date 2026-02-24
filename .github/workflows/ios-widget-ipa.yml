@@ -158,11 +158,20 @@ jobs:
             ditto -c -k --sequesterRsrc --keepParent Payload "$IPA_NAME"
           )
 
-          echo "ipa_path=build/$IPA_NAME" >> "$GITHUB_OUTPUT"
+          if ! unzip -l "build/$IPA_NAME" | grep -Eq "Payload/.+\.app/$"; then
+            echo "IPA validation failed: missing Payload/*.app structure"
+            unzip -l "build/$IPA_NAME" || true
+            exit 1
+          fi
+
+          mkdir -p dist
+          cp "build/$IPA_NAME" "dist/PoemOfTheDay.ipa"
+
+          echo "ipa_path=dist/PoemOfTheDay.ipa" >> "$GITHUB_OUTPUT"
 
           {
             echo "### Output"
-            echo "- IPA artifact: \`$IPA_NAME\`"
+            echo "- IPA artifact: \`PoemOfTheDay.ipa\`"
             echo "- App bundle: \`$(basename "$APP_PATH")\`"
             echo ""
             echo "This IPA is unsigned and intended for AltStore signing/install flow."
