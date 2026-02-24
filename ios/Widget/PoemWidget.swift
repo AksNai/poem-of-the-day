@@ -102,7 +102,7 @@ struct PoemWidgetView: View {
             .padding(12)
         }
         .clipped()
-        .containerBackground(entry.hasWallpaper ? .clear : .background, for: .widget)
+        .containerBackground(entry.hasWallpaper ? Color.clear : Color(uiColor: .systemBackground), for: .widget)
     }
 }
 
