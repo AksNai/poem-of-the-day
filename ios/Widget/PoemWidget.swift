@@ -6,8 +6,13 @@ import AppIntents
 
 /// AppEnum gives a native dropdown picker in the widget edit UI.
 /// 15 pages is generous — most poems fit in 5–10 medium-widget pages.
-enum PoemPage: Int, AppEnum {
-    case p1 = 1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15
+enum PoemPage: String, AppEnum {
+    case p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15
+
+    /// The 1-based page number derived from the case name (e.g. p3 → 3).
+    var pageNumber: Int {
+        Int(String(rawValue.dropFirst())) ?? 1
+    }
 
     static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Page")
     static var caseDisplayRepresentations: [PoemPage: DisplayRepresentation] = [
@@ -60,12 +65,12 @@ struct PoemTimelineProvider: AppIntentTimelineProvider {
     }
 
     func snapshot(for configuration: PoemPageIntent, in context: Context) async -> PoemEntry {
-        makeEntry(from: PoemStore.loadPagedPoem(), requestedPage: configuration.page.rawValue)
+        makeEntry(from: PoemStore.loadPagedPoem(), requestedPage: configuration.page.pageNumber)
     }
 
     func timeline(for configuration: PoemPageIntent, in context: Context) async -> Timeline<PoemEntry> {
         let paged = await PoemStore.loadPagedPoemRemote()
-        let entry = makeEntry(from: paged, requestedPage: configuration.page.rawValue)
+        let entry = makeEntry(from: paged, requestedPage: configuration.page.pageNumber)
         let nextRefresh = Calendar.current.date(byAdding: .minute, value: 30, to: .now) ?? .now
         return Timeline(entries: [entry], policy: .after(nextRefresh))
     }
