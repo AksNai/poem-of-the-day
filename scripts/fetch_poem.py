@@ -136,7 +136,13 @@ def fetch_html(url: str) -> str | None:
     for proxy_url in proxies:
         for attempt in range(2):
             try:
-                return _get_text(proxy_url)
+                text = _get_text(proxy_url)
+                # PF pages are large (200 KB+).  If a proxy returns a
+                # truncated / error page that is very short, skip it and
+                # try the next proxy instead.
+                if len(text) < 10_000:
+                    break
+                return text
             except Exception:
                 if attempt == 0:
                     time.sleep(2)
