@@ -90,7 +90,7 @@ struct PoemWidgetEntryView: View {
                 subsequentPageContent
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 6)
         .padding(.vertical, 14)
         .containerBackground(for: .widget) {
             Color.black.opacity(0.6)
