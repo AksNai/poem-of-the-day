@@ -96,11 +96,16 @@ struct PoemWidgetEntryView: View {
         }
     }
 
+    // Serif font helpers
+    private static let titleFont = Font.custom("Georgia-Bold", size: 16)
+    private static let authorFont = Font.custom("Georgia", size: 13).italic()
+    private static let poemFont  = Font.custom("Georgia", size: 12)
+
     // ── First page: title, author, epigraph, poem ──────────
     private var firstPageContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(entry.title)
-                .font(.system(size: 16, weight: .bold))
+                .font(Self.titleFont)
                 .foregroundStyle(.white)
                 .lineLimit(2)
 
@@ -108,14 +113,14 @@ struct PoemWidgetEntryView: View {
 
             if !entry.author.isEmpty {
                 Text(entry.author)
-                    .font(.system(size: 13).italic())
+                    .font(Self.authorFont)
                     .foregroundStyle(.white)
             }
 
             if let epi = entry.epigraph, !epi.isEmpty {
                 Spacer().frame(height: 4)
                 MarkdownRenderer.epigraphText(from: epi)
-                    .font(.system(size: entry.isQuoteEpigraph ? 11 : 13))
+                    .font(.custom("Georgia", size: entry.isQuoteEpigraph ? 11 : 13))
                     .foregroundStyle(.white.opacity(entry.isQuoteEpigraph ? 0.8 : 1.0))
                     .padding(.leading, entry.isQuoteEpigraph ? 12 : 4)
             }
@@ -123,9 +128,10 @@ struct PoemWidgetEntryView: View {
             Spacer().frame(height: 8)
 
             MarkdownRenderer.text(from: entry.excerpt)
-                .font(.system(size: 12))
+                .font(Self.poemFont)
                 .foregroundStyle(.white)
                 .lineLimit(nil)
+                .minimumScaleFactor(0.85)
 
             Spacer(minLength: 0)
         }
@@ -135,9 +141,10 @@ struct PoemWidgetEntryView: View {
     private var subsequentPageContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             MarkdownRenderer.text(from: entry.excerpt)
-                .font(.system(size: 12))
+                .font(Self.poemFont)
                 .foregroundStyle(.white)
                 .lineLimit(nil)
+                .minimumScaleFactor(0.85)
 
             Spacer(minLength: 0)
         }
