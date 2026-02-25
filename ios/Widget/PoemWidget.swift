@@ -88,7 +88,7 @@ struct PoemWidgetEntryView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer(minLength: 2)
-            Text(entry.excerpt)
+            MarkdownRenderer.text(from: entry.excerpt)
                 .font(.caption2)
                 .lineLimit(6)
                 .minimumScaleFactor(0.8)
@@ -120,7 +120,7 @@ struct PoemWidgetEntryView: View {
                 }
             }
             Divider()
-            Text(entry.excerpt)
+            MarkdownRenderer.text(from: entry.excerpt)
                 .font(.caption)
                 .lineLimit(6)
                 .minimumScaleFactor(0.85)
@@ -152,7 +152,7 @@ struct PoemWidgetEntryView: View {
                 }
             }
             Divider()
-            Text(entry.excerpt)
+            MarkdownRenderer.text(from: entry.excerpt)
                 .font(.body)
                 .lineLimit(nil)
                 .minimumScaleFactor(0.8)

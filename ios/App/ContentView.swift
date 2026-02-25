@@ -25,7 +25,7 @@ struct ContentView: View {
                             Text("Page \(idx + 1)")
                                 .font(.caption.bold())
                                 .foregroundStyle(.secondary)
-                            Text(page)
+                            MarkdownRenderer.text(from: page)
                                 .font(.body)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }

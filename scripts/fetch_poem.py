@@ -37,8 +37,9 @@ _HEADERS = {
 
 _TIMEOUT = 30  # seconds
 
-# Sections we never want leaking into the poem body
-_STOP_PATTERN = re.compile(
+# Boilerplate tokens that may appear BEFORE the poem body — used to skip
+# navigation, headers, and sidebar items.
+_PRE_SKIP_PATTERN = re.compile(
     r"^("
     r"Poems & Poets|Topics & Themes|Features|Grants & Programs|About Us|"
     r"Poetry magazine|Subscribe|Related|More by|Advertise|Copyright|"
@@ -47,6 +48,21 @@ _STOP_PATTERN = re.compile(
     r"Skip to main content|Read More|Donate|Listen|"
     r"January|February|March|April|May|June|July|August|"
     r"September|October|November|December"
+    r")\b",
+    re.I,
+)
+
+# Tokens that signal the END of the poem body.
+# NOTE: month names are deliberately excluded — they can appear in poems
+# (e.g. "April is the cruellest month" in The Waste Land).
+_POST_STOP_PATTERN = re.compile(
+    r"^("
+    r"Poems & Poets|Topics & Themes|Features|Grants & Programs|About Us|"
+    r"Poetry magazine|Subscribe|Related|More by|Advertise|"
+    r"A note from the editor|Sign Up|"
+    r"RECENT POEMS OF THE DAY|Poetry Foundation Homepage|"
+    r"Skip to main content|Donate|"
+    r"THIS POEM HAS A POEM GUIDE|View Poem Guide"
     r")\b",
     re.I,
 )
@@ -209,12 +225,15 @@ def parse_poem_markdown(text: str) -> dict:
                 continue
             if stripped.startswith("[]("):           # empty MD images
                 continue
-            if _STOP_PATTERN.match(stripped):
+            if _PRE_SKIP_PATTERN.match(stripped):
                 continue
             started = True
 
-        # Stop at navigation / footer boilerplate
-        if started and _STOP_PATTERN.match(stripped):
+        # Stop at navigation / footer boilerplate (no month names here!)
+        if started and _POST_STOP_PATTERN.match(stripped):
+            break
+        # Stop at Markdown headings (####, ###, etc.) — navigational
+        if started and re.match(r"^#{2,}\s", stripped):
             break
         # Stop at horizontal rules (---) which Jina uses as section breaks
         if started and re.match(r"^[-_*]{3,}\s*$", stripped):
