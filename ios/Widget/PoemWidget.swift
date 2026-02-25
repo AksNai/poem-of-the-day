@@ -97,11 +97,11 @@ struct PoemWidgetEntryView: View {
     }
 
     // Serif font helpers — "Georgia" is a built-in iOS font
-    private static let titleFont = Font.custom("Georgia", fixedSize: 16).bold()
-    private static let authorFont = Font.custom("Georgia", fixedSize: 13).italic()
-    private static let poemFont  = Font.custom("Georgia", fixedSize: 12)
+    private static let titleFont = Font.custom("Georgia", fixedSize: 14).bold()
+    private static let authorFont = Font.custom("Georgia", fixedSize: 11).italic()
+    private static let poemFont  = Font.custom("Georgia", fixedSize: 11)
 
-    // ── First page: title, author, epigraph, poem ──────────
+    // ── First page: title, author, poem ──────────────────
     private var firstPageContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(entry.title)
@@ -109,29 +109,19 @@ struct PoemWidgetEntryView: View {
                 .foregroundStyle(.white)
                 .lineLimit(2)
 
-            Spacer().frame(height: 2)
-
             if !entry.author.isEmpty {
-                Text(entry.author)
+                Spacer().frame(height: 1)
+                Text("by \(entry.author)")
                     .font(Self.authorFont)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.white.opacity(0.85))
             }
 
-            if let epi = entry.epigraph, !epi.isEmpty {
-                Spacer().frame(height: 4)
-                MarkdownRenderer.epigraphText(from: epi)
-                    .font(.custom("Georgia", fixedSize: entry.isQuoteEpigraph ? 11 : 13))
-                    .foregroundStyle(.white.opacity(entry.isQuoteEpigraph ? 0.8 : 1.0))
-                    .padding(.leading, entry.isQuoteEpigraph ? 12 : 4)
-            }
-
-            Spacer().frame(height: 8)
+            Spacer().frame(height: 6)
 
             MarkdownRenderer.text(from: entry.excerpt)
                 .font(Self.poemFont)
                 .foregroundStyle(.white)
                 .lineLimit(nil)
-                .minimumScaleFactor(0.85)
 
             Spacer(minLength: 0)
         }
@@ -144,7 +134,6 @@ struct PoemWidgetEntryView: View {
                 .font(Self.poemFont)
                 .foregroundStyle(.white)
                 .lineLimit(nil)
-                .minimumScaleFactor(0.85)
 
             Spacer(minLength: 0)
         }

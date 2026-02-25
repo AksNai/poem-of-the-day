@@ -9,8 +9,8 @@ enum PoemPaginator {
     /// Blank lines between stanzas count as lines.
     static func paginate(
         text: String,
-        firstPageLines: Int = 6,
-        otherPageLines: Int = 7
+        firstPageLines: Int = 7,
+        otherPageLines: Int = 10
     ) -> [String] {
         let cleaned = text
             .replacingOccurrences(of: "\r\n", with: "\n")
