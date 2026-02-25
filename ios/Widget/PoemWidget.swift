@@ -151,6 +151,7 @@ struct PoemWidgetEntryView: View {
 
             Spacer().frame(height: 5)
 
+
             poemLinesView
 
             Spacer(minLength: 0)
@@ -160,28 +161,8 @@ struct PoemWidgetEntryView: View {
     // ── Subsequent pages: poem only ────────────────────────
     private var subsequentPageContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            poemLinesView
-    /// Renders each line of the excerpt in a VStack.
-    /// Blank lines are replaced with a 5pt spacer for stanza breaks.
-    private var poemLinesView: some View {
-        let lines = entry.excerpt
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
-            .components(separatedBy: "\n")
 
-        return VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                if line.trimmingCharacters(in: .whitespaces).isEmpty {
-                    Spacer().frame(height: 5)
-                } else {
-                    MarkdownRenderer.text(from: line)
-                        .font(Self.poemFont)
-                        .foregroundStyle(.white)
-                        .lineLimit(nil)
-                }
-            }
-        }
-    }
+            poemLinesView
 
             Spacer(minLength: 0)
         }
@@ -189,8 +170,22 @@ struct PoemWidgetEntryView: View {
 
     /// Splits the excerpt at blank lines and renders each stanza with
     /// 5pt gaps (matching the epigraph → body spacing).
-    private var stanzaStack: some View {
-        EmptyView()
+    /// Renders each line of the excerpt, using 5pt spacing for blank lines (matching epigraph-body gap).
+    private var poemLinesView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            let lines = entry.excerpt.split(separator: "\n", omittingEmptySubsequences: false)
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Spacer().frame(height: 5)
+                } else {
+                    MarkdownRenderer.text(from: String(line))
+                        .font(Self.poemFont)
+                        .foregroundStyle(.white)
+                        .lineLimit(nil)
+                }
+            }
+        }
+    }
     }
 }
 
