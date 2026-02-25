@@ -13,8 +13,8 @@ enum PoemPaginator {
     ///    rendered line (Georgia ~11.5pt in a medium widget ≈ 48).
     static func paginate(
         text: String,
-        firstPageVisualLines: Int = 9,
-        otherPageVisualLines: Int = 12,
+        firstPageVisualLines: Int = 11,
+        otherPageVisualLines: Int = 14,
         charsPerVisualLine: Int = 48
     ) -> [String] {
         let cleaned = text

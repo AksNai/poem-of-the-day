@@ -121,12 +121,12 @@ struct PoemWidgetEntryView: View {
                 Spacer().frame(height: 3)
                 if entry.isQuoteEpigraph {
                     MarkdownRenderer.epigraphText(from: epigraph)
-                        .font(Font.custom("Georgia", fixedSize: 10).italic())
+                        .font(Font.custom("Georgia", fixedSize: 11.5).italic())
                         .foregroundStyle(.white.opacity(0.7))
                         .lineLimit(2)
                 } else {
                     Text(epigraph)
-                        .font(Font.custom("Georgia", fixedSize: 11).italic())
+                        .font(Font.custom("Georgia", fixedSize: 12).italic())
                         .foregroundStyle(.white.opacity(0.85))
                         .lineLimit(1)
                 }
