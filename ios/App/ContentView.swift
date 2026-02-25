@@ -2,46 +2,32 @@ import SwiftUI
 import WidgetKit
 
 struct ContentView: View {
-    @State private var pagedPoem = PoemStore.loadPagedPoem()
+    @State private var poem = PoemStore.loadPagedPoem().poem
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(pagedPoem.poem.title)
+                        Text(poem.title)
                             .font(.title2.bold())
-                        Text("by \(pagedPoem.poem.author)")
+                        Text("by \(poem.author)")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
 
                     // Epigraph / dedication (e.g. "(for Harlem Magic)")
-                    if let epigraph = pagedPoem.poem.epigraph, !epigraph.isEmpty {
+                    if let epigraph = poem.epigraph, !epigraph.isEmpty {
                         MarkdownRenderer.epigraphText(from: epigraph)
-                            .font(pagedPoem.poem.isQuoteEpigraph ? .footnote : .body)
-                            .foregroundStyle(pagedPoem.poem.isQuoteEpigraph ? .secondary : .primary)
-                            .padding(.leading, pagedPoem.poem.isQuoteEpigraph ? 24 : 8)
+                            .font(poem.isQuoteEpigraph ? .footnote : .body)
+                            .foregroundStyle(poem.isQuoteEpigraph ? .secondary : .primary)
+                            .padding(.leading, poem.isQuoteEpigraph ? 24 : 8)
                             .padding(.top, 4)
                     }
 
-                    Text("\(pagedPoem.pages.count) page\(pagedPoem.pages.count == 1 ? "" : "s")")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    ForEach(Array(pagedPoem.pages.enumerated()), id: \.offset) { idx, page in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Page \(idx + 1)")
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
-                            MarkdownRenderer.text(from: page)
-                                .font(.body)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .padding(12)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }
+                    MarkdownRenderer.text(from: poem.poem)
+                        .font(.body)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding()
             }
@@ -50,7 +36,7 @@ struct ContentView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         Task {
-                            pagedPoem = await PoemStore.loadPagedPoemRemote()
+                            poem = await PoemStore.loadPagedPoemRemote().poem
                             PoemStore.reloadWidgetTimelines()
                         }
                     } label: {
@@ -59,7 +45,7 @@ struct ContentView: View {
                 }
             }
             .task {
-                pagedPoem = await PoemStore.loadPagedPoemRemote()
+                poem = await PoemStore.loadPagedPoemRemote().poem
                 PoemStore.reloadWidgetTimelines()
             }
         }

@@ -1,5 +1,17 @@
 import WidgetKit
 import SwiftUI
+import AppIntents
+
+// MARK: - Widget Configuration Intent
+
+/// Users long-press → Edit Widget → pick the page number for this instance.
+struct PoemPageIntent: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource = "Poem Page"
+    static var description = IntentDescription("Choose which page of today's poem to display.")
+
+    @Parameter(title: "Page", default: 1)
+    var page: Int
+}
 
 // MARK: - Timeline Entry
 
@@ -7,8 +19,8 @@ struct PoemEntry: TimelineEntry {
     let date: Date
     let title: String
     let author: String
-    let excerpt: String          // fits the current widget size
-    let epigraph: String?        // dedication / epigraph (e.g. "(for Harlem Magic)")
+    let excerpt: String          // the text for this page
+    let epigraph: String?        // only present on page 1
     let epigraphStyle: String?   // "dedication" or "quote"
     let pageIndex: Int
     let totalPages: Int
@@ -16,49 +28,51 @@ struct PoemEntry: TimelineEntry {
     var isQuoteEpigraph: Bool { epigraphStyle == "quote" }
 }
 
-// MARK: - Timeline Provider
+// MARK: - Timeline Provider (Intent-based)
 
-struct PoemTimelineProvider: TimelineProvider {
+struct PoemTimelineProvider: AppIntentTimelineProvider {
 
-    // Placeholder shown while the widget loads for the first time.
     func placeholder(in context: Context) -> PoemEntry {
         PoemEntry(
             date: .now,
             title: "Poem of the Day",
             author: "Loading…",
-            excerpt: "A new poem every day\nright on your home screen.",            epigraph: nil,            epigraphStyle: nil,            pageIndex: 1,
+            excerpt: "A new poem every day\nright on your home screen.",
+            epigraph: nil,
+            epigraphStyle: nil,
+            pageIndex: 1,
             totalPages: 1
         )
     }
 
-    // Snapshot used in the widget gallery preview.
-    func getSnapshot(in context: Context, completion: @escaping (PoemEntry) -> Void) {
-        completion(makeEntry(from: PoemStore.loadPagedPoem()))
+    func snapshot(for configuration: PoemPageIntent, in context: Context) async -> PoemEntry {
+        makeEntry(from: PoemStore.loadPagedPoem(), requestedPage: configuration.page)
     }
 
-    // Full timeline — refresh roughly every 30 minutes.
-    func getTimeline(in context: Context, completion: @escaping (Timeline<PoemEntry>) -> Void) {
-        Task {
-            let paged = await PoemStore.loadPagedPoemRemote()
-            let entry = makeEntry(from: paged)
-            let nextRefresh = Calendar.current.date(byAdding: .minute, value: 30, to: .now) ?? .now
-            completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
-        }
+    func timeline(for configuration: PoemPageIntent, in context: Context) async -> Timeline<PoemEntry> {
+        let paged = await PoemStore.loadPagedPoemRemote()
+        let entry = makeEntry(from: paged, requestedPage: configuration.page)
+        let nextRefresh = Calendar.current.date(byAdding: .minute, value: 30, to: .now) ?? .now
+        return Timeline(entries: [entry], policy: .after(nextRefresh))
     }
 
     // MARK: Helpers
 
-    private func makeEntry(from paged: PagedPoem) -> PoemEntry {
-        let page = paged.pages.first ?? paged.poem.poem
+    private func makeEntry(from paged: PagedPoem, requestedPage: Int) -> PoemEntry {
+        let total = paged.pages.count
+        let clamped = max(1, min(requestedPage, total))
+        let page = paged.pages[clamped - 1]
+
         return PoemEntry(
             date: .now,
             title: paged.poem.title,
             author: paged.poem.author,
             excerpt: page,
-            epigraph: paged.poem.epigraph,
-            epigraphStyle: paged.poem.epigraphStyle,
-            pageIndex: 1,
-            totalPages: paged.pages.count
+            // Only show epigraph on the first page
+            epigraph: clamped == 1 ? paged.poem.epigraph : nil,
+            epigraphStyle: clamped == 1 ? paged.poem.epigraphStyle : nil,
+            pageIndex: clamped,
+            totalPages: total
         )
     }
 }
@@ -114,22 +128,14 @@ struct PoemWidgetEntryView: View {
     // ── Medium ─────────────────────────────────────────────
     private var mediumView: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.title)
-                        .font(.subheadline.bold())
-                        .lineLimit(1)
-                    Text("by \(entry.author)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer()
-                if entry.totalPages > 1 {
-                    Text("p. \(entry.pageIndex)/\(entry.totalPages)")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.title)
+                    .font(.subheadline.bold())
+                    .lineLimit(1)
+                Text("by \(entry.author)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             if let epi = entry.epigraph, !epi.isEmpty {
                 MarkdownRenderer.epigraphText(from: epi)
@@ -153,22 +159,14 @@ struct PoemWidgetEntryView: View {
     // ── Large ──────────────────────────────────────────────
     private var largeView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.title)
-                        .font(.headline)
-                        .lineLimit(2)
-                    Text("by \(entry.author)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer()
-                if entry.totalPages > 1 {
-                    Text("Page \(entry.pageIndex) of \(entry.totalPages)")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.title)
+                    .font(.headline)
+                    .lineLimit(2)
+                Text("by \(entry.author)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             if let epi = entry.epigraph, !epi.isEmpty {
                 MarkdownRenderer.epigraphText(from: epi)
@@ -197,11 +195,11 @@ struct PoemOfTheDayWidget: Widget {
     let kind = "PoemOfTheDayWidget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: PoemTimelineProvider()) { entry in
+        AppIntentConfiguration(kind: kind, intent: PoemPageIntent.self, provider: PoemTimelineProvider()) { entry in
             PoemWidgetEntryView(entry: entry)
         }
         .configurationDisplayName("Poem of the Day")
-        .description("Displays today's poem right on your home screen.")
+        .description("Displays today's poem. Add multiple widgets and set each to a different page.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
@@ -213,7 +211,9 @@ struct PoemOfTheDayWidget: Widget {
     PoemOfTheDayWidget()
 } timeline: {
     PoemEntry(date: .now, title: "The Road Not Taken", author: "Robert Frost",
-              excerpt: "Two roads diverged in a yellow wood,\nAnd sorry I could not travel both…",              epigraph: nil,              epigraphStyle: nil,              pageIndex: 1, totalPages: 2)
+              excerpt: "Two roads diverged in a yellow wood,\nAnd sorry I could not travel both…",
+              epigraph: nil, epigraphStyle: nil,
+              pageIndex: 1, totalPages: 2)
 }
 
 #Preview("Medium", as: .systemMedium) {
@@ -221,8 +221,7 @@ struct PoemOfTheDayWidget: Widget {
 } timeline: {
     PoemEntry(date: .now, title: "The Road Not Taken", author: "Robert Frost",
               excerpt: "Two roads diverged in a yellow wood,\nAnd sorry I could not travel both\nAnd be one traveler, long I stood\nAnd looked down one as far as I could\nTo where it bent in the undergrowth;",
-              epigraph: nil,
-              epigraphStyle: nil,
+              epigraph: nil, epigraphStyle: nil,
               pageIndex: 1, totalPages: 2)
 }
 
@@ -231,8 +230,7 @@ struct PoemOfTheDayWidget: Widget {
 } timeline: {
     PoemEntry(date: .now, title: "The Road Not Taken", author: "Robert Frost",
               excerpt: "Two roads diverged in a yellow wood,\nAnd sorry I could not travel both\nAnd be one traveler, long I stood\nAnd looked down one as far as I could\nTo where it bent in the undergrowth;\n\nThen took the other, as just as fair,\nAnd having perhaps the better claim,\nBecause it was grassy and wanted wear;\nThough as for that the passing there\nHad worn them really about the same,",
-              epigraph: nil,
-              epigraphStyle: nil,
+              epigraph: nil, epigraphStyle: nil,
               pageIndex: 1, totalPages: 2)
 }
 #endif
