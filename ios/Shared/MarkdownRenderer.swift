@@ -27,8 +27,17 @@ enum MarkdownRenderer {
     }
 
     /// Render an epigraph (dedication) with italic styling.
+    ///
+    /// Multi-line epigraphs (e.g. a Dante quote or multi-paragraph
+    /// dedication) are handled by wrapping each non-empty line in
+    /// Markdown italic markers individually, so line breaks are
+    /// preserved correctly.
     @ViewBuilder
     static func epigraphText(from epigraph: String) -> Text {
-        Text(attributedString(from: "_\(epigraph)_"))
+        let wrapped = epigraph
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.isEmpty ? "" : "_\($0)_" }
+            .joined(separator: "\n")
+        Text(attributedString(from: wrapped))
     }
 }

@@ -187,9 +187,18 @@
           poemTitle.textContent = data.title || "Untitled";
           poemAuthor.textContent = data.author ? `by ${data.author}` : "";
 
-          // Epigraph / dedication (e.g. "(for Harlem Magic)")
+          // Epigraph / dedication (may be multi-line / multi-paragraph)
           if (data.epigraph) {
-            poemEpigraph.textContent = data.epigraph;
+            // Support both string and array (future-proofing)
+            const epiText = Array.isArray(data.epigraph)
+              ? data.epigraph.join("\n\n")
+              : data.epigraph;
+            // Render with line breaks (pre-wrap handles \n natively,
+            // but we still escape HTML for safety via textContent on a
+            // temporary node, then swap to innerHTML with <br>).
+            const tmp = document.createElement("span");
+            tmp.textContent = epiText;
+            poemEpigraph.innerHTML = tmp.innerHTML.replace(/\n/g, "<br>");
             poemEpigraph.style.display = "block";
           } else {
             poemEpigraph.style.display = "none";

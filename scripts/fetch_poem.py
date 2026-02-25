@@ -303,6 +303,54 @@ def html_to_markdown(html_fragment: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Epigraph extraction from rendered page HTML
+# ---------------------------------------------------------------------------
+
+def _extract_epigraph_from_page(page_html: str) -> str | None:
+    """Extract epigraph / dedication from the rendered PF page HTML.
+
+    Poetry Foundation wraps epigraphs in a ``<div>`` whose class list
+    includes both ``type-paragraph-sm`` and ``italic``.  This is
+    consistent across all formatting variants the site uses (short
+    dedications, multi-line quotes, multi-paragraph Latin inscriptions,
+    etc.).
+
+    Returns plain text with ``\\n`` for line breaks and ``\\n\\n``
+    for paragraph separations, or *None* if no epigraph is found.
+    """
+    for m in re.finditer(
+        r'<div\s[^>]*class="([^"]*)"[^>]*>(.*?)</div>',
+        page_html,
+        re.S | re.I,
+    ):
+        cls_words = set(m.group(1).split())
+        if "type-paragraph-sm" not in cls_words or "italic" not in cls_words:
+            continue
+
+        inner = m.group(2).strip()
+        if not inner:
+            continue
+
+        # Strip source-formatting newlines first — meaningful line
+        # breaks come from <br> and <p> tags, not from \r\n in the
+        # HTML source (same fix as the poem-body double-spacing bug).
+        text = inner.replace("\r\n", "").replace("\r", "").replace("\n", "")
+        # Convert HTML structure → plain-text newlines
+        text = re.sub(r"<br\s*/?>", "\n", text)
+        text = re.sub(r"</p>\s*<p[^>]*>", "\n\n", text, flags=re.I | re.S)
+        text = re.sub(r"<[^>]+>", "", text)
+        text = unescape(text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        text = "\n".join(ln.rstrip() for ln in text.splitlines())
+        text = text.strip()
+
+        if text and len(text) < 1000:
+            return text
+
+    return None
+
+
+# ---------------------------------------------------------------------------
 # NUXT data extraction
 # ---------------------------------------------------------------------------
 
@@ -376,21 +424,32 @@ def extract_poem_from_nuxt(page_html: str) -> str | None:
     if not best_html:
         return None
 
-    # 2. Find epigraph / dedication: <div style="font-style:italic">
-    #    These are short italic blocks (dedications like "(for Harlem Magic)")
-    epigraph = ""
-    for item in data:
-        if not isinstance(item, str):
-            continue
-        if re.match(
-            r'<div\s[^>]*font-style:\s*italic[^>]*>',
-            item, re.I,
-        ):
-            text = html_to_markdown(item)
-            # Dedications/epigraphs are short; skip long prose passages
-            if text and len(text) < 300:
-                # The html_to_markdown already wraps it in _..._
-                epigraph = text
+    # 2. Find epigraph / dedication
+    #    Primary: extract from rendered page HTML (reliable for ALL PF
+    #    epigraph styles — short dedications, multi-line quotes, multi-
+    #    paragraph inscriptions, etc.).
+    #    Fallback: scan NUXT items for <div style="font-style:italic">.
+    epigraph = _extract_epigraph_from_page(page_html)
+
+    if not epigraph:
+        for item in data:
+            if not isinstance(item, str):
+                continue
+            if re.match(
+                r'<div\s[^>]*font-style:\s*italic[^>]*>',
+                item, re.I,
+            ):
+                text = html_to_markdown(item)
+                if text and len(text) < 1000:
+                    # Strip italic markers line-by-line — the epigraph
+                    # field is plain text; renderers add italic.
+                    lines = []
+                    for ln in text.splitlines():
+                        s = ln.strip()
+                        while s.startswith("_") and s.endswith("_") and len(s) > 1:
+                            s = s[1:-1].strip()
+                        lines.append(s)
+                    epigraph = "\n".join(lines).strip()
 
     # 3. Convert poem body HTML → Markdown
     body = html_to_markdown(best_html)
@@ -400,15 +459,10 @@ def extract_poem_from_nuxt(page_html: str) -> str | None:
     # 4. Return body and epigraph separately
     result = {"body": body}
     if epigraph:
-        # Check the epigraph text isn't already embedded in the body
+        # Ensure the epigraph text isn't already embedded in the body
         plain_epi = epigraph.replace("_", "").replace("*", "").strip()
         if plain_epi not in body.replace("_", "").replace("*", ""):
-            # Strip the outer italic markers — the epigraph field is
-            # semantically "this is an epigraph"; rendering decides style.
-            epi_clean = epigraph.strip()
-            if epi_clean.startswith("_") and epi_clean.endswith("_"):
-                epi_clean = epi_clean[1:-1].strip()
-            result["epigraph"] = epi_clean
+            result["epigraph"] = epigraph
 
     return result
 
