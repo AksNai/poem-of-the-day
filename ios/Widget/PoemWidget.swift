@@ -98,9 +98,9 @@ struct PoemWidgetEntryView: View {
     }
 
     // Serif font helpers — "Georgia" is a built-in iOS font
-    private static let titleFont = Font.custom("Georgia", fixedSize: 14).bold()
-    private static let authorFont = Font.custom("Georgia", fixedSize: 11).italic()
-    private static let poemFont  = Font.custom("Georgia", fixedSize: 11)
+    private static let titleFont = Font.custom("Georgia", fixedSize: 15).bold()
+    private static let authorFont = Font.custom("Georgia", fixedSize: 11.5).italic()
+    private static let poemFont  = Font.custom("Georgia", fixedSize: 11.5)
 
     // ── First page: title, author, epigraph, poem ───────
     private var firstPageContent: some View {

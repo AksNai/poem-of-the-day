@@ -1,16 +1,21 @@
 import Foundation
 
 enum PoemPaginator {
-    /// Split poem text into widget-sized pages by **line count**.
+    /// Split poem text into widget-sized pages using **visual-line estimation**.
     ///
-    /// - First page: `firstPageLines` lines (default 7) — title/author take space.
-    /// - Subsequent pages: `otherPageLines` lines (default 10).
+    /// Long logical lines wrap in the widget, so we estimate how many visual
+    /// lines each logical line occupies: `ceil(charCount / charsPerVisualLine)`.
+    /// Pages are filled to a visual-line budget, preventing text cutoff.
     ///
-    /// Blank lines between stanzas count as lines.
+    /// - `firstPageVisualLines`: budget for page 1 (title/author eat space).
+    /// - `otherPageVisualLines`: budget for pages 2+.
+    /// - `charsPerVisualLine`:   conservative estimate of characters per
+    ///    rendered line (Georgia ~11.5pt in a medium widget ≈ 40).
     static func paginate(
         text: String,
-        firstPageLines: Int = 6,
-        otherPageLines: Int = 10
+        firstPageVisualLines: Int = 7,
+        otherPageVisualLines: Int = 9,
+        charsPerVisualLine: Int = 40
     ) -> [String] {
         let cleaned = text
             .replacingOccurrences(of: "\r\n", with: "\n")
@@ -24,21 +29,50 @@ enum PoemPaginator {
         var idx = 0
 
         while idx < allLines.count {
-            let limit = pages.isEmpty ? firstPageLines : otherPageLines
-            let end = min(idx + limit, allLines.count)
-            let slice = Array(allLines[idx..<end])
+            let budget = pages.isEmpty ? firstPageVisualLines : otherPageVisualLines
 
-            // Trim trailing blank lines from this page
-            var trimmed = slice
-            while let last = trimmed.last, last.trimmingCharacters(in: .whitespaces).isEmpty {
-                trimmed.removeLast()
+            // Skip leading blank lines on pages 2+ (don't waste space)
+            if !pages.isEmpty {
+                while idx < allLines.count,
+                      allLines[idx].trimmingCharacters(in: .whitespaces).isEmpty {
+                    idx += 1
+                }
+            }
+            guard idx < allLines.count else { break }
+
+            var visualLinesUsed = 0
+            var pageLines: [String] = []
+
+            while idx < allLines.count {
+                let line = allLines[idx]
+                let isBlank = line.trimmingCharacters(in: .whitespaces).isEmpty
+                let cost = isBlank
+                    ? 1
+                    : max(1, Int(ceil(Double(line.count) / Double(charsPerVisualLine))))
+
+                // If adding this line would exceed the budget and we already
+                // have content, stop — the line goes on the next page.
+                if visualLinesUsed + cost > budget && !pageLines.isEmpty {
+                    break
+                }
+
+                pageLines.append(line)
+                visualLinesUsed += cost
+                idx += 1
+
+                if visualLinesUsed >= budget { break }
             }
 
-            let page = trimmed.joined(separator: "\n")
+            // Trim trailing blank lines
+            while let last = pageLines.last,
+                  last.trimmingCharacters(in: .whitespaces).isEmpty {
+                pageLines.removeLast()
+            }
+
+            let page = pageLines.joined(separator: "\n")
             if !page.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 pages.append(page)
             }
-            idx = end
         }
 
         return pages.isEmpty ? [cleaned] : pages
