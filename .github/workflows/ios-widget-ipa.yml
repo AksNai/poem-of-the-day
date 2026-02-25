@@ -1,4 +1,4 @@
-name: Build iOS Widget IPA
+name: Build iOS IPA
 
 on:
   workflow_dispatch:
@@ -12,87 +12,75 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-
       - name: Install XcodeGen
         run: brew install xcodegen
 
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Show schemes
+      - name: List schemes
         run: xcodebuild -project PoemOfTheDay.xcodeproj -list
 
-      - name: Build unsigned
+      - name: Archive
         run: |
-          xcodebuild clean build \
+          xcodebuild archive \
             -project PoemOfTheDay.xcodeproj \
-            -scheme PoemOfTheDayAppOnly \
+            -scheme PoemOfTheDay \
             -sdk iphoneos \
-            -configuration Release \
-            -derivedDataPath build/DerivedData \
+            -archivePath build/PoemOfTheDay.xcarchive \
             -destination "generic/platform=iOS" \
-            ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            CODE_SIGN_ENTITLEMENTS="" \
             DEVELOPMENT_TEAM="" \
-            VALIDATE_PRODUCT=NO \
             ENABLE_BITCODE=NO
 
-      - name: Package IPA
+      - name: Create IPA
         run: |
           set -euo pipefail
 
-          APP=$(find build/DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -type d | head -1)
-          if [ -z "$APP" ]; then
-            echo "ERROR: No .app bundle found"
-            find build/DerivedData/Build/Products/ -type d
+          # Locate .app inside the archive
+          APP="build/PoemOfTheDay.xcarchive/Products/Applications/PoemOfTheDay.app"
+          if [ ! -d "$APP" ]; then
+            echo "App not found at expected path, searching..."
+            APP=$(find build/PoemOfTheDay.xcarchive -name "*.app" -type d | head -1)
+          fi
+
+          if [ -z "$APP" ] || [ ! -d "$APP" ]; then
+            echo "ERROR: No .app found in archive"
+            find build/PoemOfTheDay.xcarchive -type d | head -30
             exit 1
           fi
-          echo "Found app: $APP"
+          echo "App: $APP"
 
-          # Show what we're packaging
-          echo "--- App bundle structure ---"
-          find "$APP" -maxdepth 2 -type f | head -30
+          # Verify Info.plist exists and is readable
+          echo "--- Info.plist check ---"
+          plutil -p "$APP/Info.plist" | head -20
           echo ""
 
-          # Check for embedded extension
-          if [ -d "$APP/PlugIns" ]; then
-            echo "--- Embedded extensions ---"
-            ls -la "$APP/PlugIns/"
-          fi
+          # Build Payload structure
+          mkdir Payload
+          cp -R "$APP" Payload/
 
-          # Build Payload
-          mkdir -p Payload
-          cp -a "$APP" Payload/
-
-          # Remove PlugIns if present (no extensions in app-only build)
-          rm -rf Payload/*.app/PlugIns
-
-          # Strip code signatures (AltStore re-signs everything)
-          find Payload -type d -name "_CodeSignature" -exec rm -rf {} + 2>/dev/null || true
+          # Clean up anything that might cause signing issues
+          find Payload -name "_CodeSignature" -type d -exec rm -rf {} + 2>/dev/null || true
           find Payload -name "*.mobileprovision" -delete 2>/dev/null || true
           find Payload -name ".DS_Store" -delete 2>/dev/null || true
 
-          # Create IPA with standard zip
+          # Remove PlugIns if any snuck in
+          rm -rf Payload/PoemOfTheDay.app/PlugIns
+
+          echo "--- Payload contents ---"
+          find Payload -type f | head -30
+          echo ""
+
+          # Create IPA
           /usr/bin/zip -r -X PoemOfTheDay.ipa Payload
 
-          # Show IPA contents
+          echo "--- IPA listing ---"
+          unzip -l PoemOfTheDay.ipa | head -30
           echo ""
-          echo "--- IPA contents ---"
-          unzip -l PoemOfTheDay.ipa | head -40
-          echo ""
-          echo "IPA size: $(du -h PoemOfTheDay.ipa | cut -f1)"
-
-          # Validate
-          if ! unzip -l PoemOfTheDay.ipa | grep -q "Payload/.*\.app/Info.plist"; then
-            echo "FATAL: Invalid IPA — missing Payload/*.app/Info.plist"
-            exit 1
-          fi
-          echo "IPA validated OK"
+          echo "Size: $(du -h PoemOfTheDay.ipa | cut -f1)"
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4

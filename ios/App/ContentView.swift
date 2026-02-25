@@ -1,5 +1,4 @@
 import SwiftUI
-import WidgetKit
 
 struct ContentView: View {
     @State private var pagedPoem = PoemStore.loadPagedPoem()
@@ -8,7 +7,6 @@ struct ContentView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    // Header
                     VStack(alignment: .leading, spacing: 4) {
                         Text(pagedPoem.poem.title)
                             .font(.title2.bold())
@@ -17,11 +15,10 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Text("\(pagedPoem.pages.count) widget page\(pagedPoem.pages.count == 1 ? "" : "s")")
+                    Text("\(pagedPoem.pages.count) page\(pagedPoem.pages.count == 1 ? "" : "s")")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    // Pages
                     ForEach(Array(pagedPoem.pages.enumerated()), id: \.offset) { idx, page in
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Page \(idx + 1)")
@@ -42,10 +39,7 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        Task {
-                            pagedPoem = await PoemStore.loadPagedPoemRemote()
-                            WidgetCenter.shared.reloadAllTimelines()
-                        }
+                        Task { pagedPoem = await PoemStore.loadPagedPoemRemote() }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }

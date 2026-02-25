@@ -2,6 +2,7 @@ import Foundation
 
 enum PoemStore {
     private static let cacheKey = "cachedPoemJSON"
+    static let remoteURL = "https://raw.githubusercontent.com/AksNai/poem-of-the-day/main/poem.json"
 
     // MARK: - Public
 
@@ -27,10 +28,7 @@ enum PoemStore {
     }
 
     private static func fetchRemote() async -> PoemData? {
-        guard
-            let urlStr = Bundle.main.object(forInfoDictionaryKey: "PoemRemoteURL") as? String,
-            let url = URL(string: urlStr)
-        else { return nil }
+        guard let url = URL(string: remoteURL) else { return nil }
 
         var req = URLRequest(url: url)
         req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
