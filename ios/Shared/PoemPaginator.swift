@@ -10,12 +10,12 @@ enum PoemPaginator {
     /// - `firstPageVisualLines`: budget for page 1 (title/author eat space).
     /// - `otherPageVisualLines`: budget for pages 2+.
     /// - `charsPerVisualLine`:   conservative estimate of characters per
-    ///    rendered line (Georgia ~11.5pt in a medium widget ≈ 40).
+    ///    rendered line (Georgia ~11.5pt in a medium widget ≈ 48).
     static func paginate(
         text: String,
-        firstPageVisualLines: Int = 7,
-        otherPageVisualLines: Int = 9,
-        charsPerVisualLine: Int = 40
+        firstPageVisualLines: Int = 9,
+        otherPageVisualLines: Int = 12,
+        charsPerVisualLine: Int = 48
     ) -> [String] {
         let cleaned = text
             .replacingOccurrences(of: "\r\n", with: "\n")
