@@ -26,6 +26,7 @@ struct PoemEntry: TimelineEntry {
     let totalPages: Int
 
     var isQuoteEpigraph: Bool { epigraphStyle == "quote" }
+    var isFirstPage: Bool { pageIndex == 1 }
 }
 
 // MARK: - Timeline Provider (Intent-based)
@@ -68,7 +69,6 @@ struct PoemTimelineProvider: AppIntentTimelineProvider {
             title: paged.poem.title,
             author: paged.poem.author,
             excerpt: page,
-            // Only show epigraph on the first page
             epigraph: clamped == 1 ? paged.poem.epigraph : nil,
             epigraphStyle: clamped == 1 ? paged.poem.epigraphStyle : nil,
             pageIndex: clamped,
@@ -77,114 +77,69 @@ struct PoemTimelineProvider: AppIntentTimelineProvider {
     }
 }
 
-// MARK: - Widget Views
+// MARK: - Widget View
 
 struct PoemWidgetEntryView: View {
-    @Environment(\.widgetFamily) var family
     var entry: PoemEntry
 
     var body: some View {
-        switch family {
-        case .systemSmall:
-            smallView
-        case .systemMedium:
-            mediumView
-        case .systemLarge:
-            largeView
-        default:
-            mediumView
-        }
-    }
-
-    // ── Small ──────────────────────────────────────────────
-    private var smallView: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(entry.title)
-                .font(.caption.bold())
-                .lineLimit(1)
-            Text(entry.author)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            if let epi = entry.epigraph, !epi.isEmpty {
-                MarkdownRenderer.epigraphText(from: epi)
-                    .font(entry.isQuoteEpigraph ? .caption2 : .caption)
-                    .foregroundStyle(entry.isQuoteEpigraph ? .secondary : .primary)
-                    .padding(.leading, entry.isQuoteEpigraph ? 10 : 4)
-                    .lineLimit(1)
+        VStack(alignment: .leading, spacing: 0) {
+            if entry.isFirstPage {
+                firstPageContent
+            } else {
+                subsequentPageContent
             }
-            Spacer(minLength: 2)
-            MarkdownRenderer.text(from: entry.excerpt)
-                .font(.caption2)
-                .lineLimit(6)
-                .minimumScaleFactor(0.8)
-        }
-        .padding(12)
-        .containerBackground(for: .widget) {
-            Color(.systemBackground)
-        }
-    }
-
-    // ── Medium ─────────────────────────────────────────────
-    private var mediumView: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.title)
-                    .font(.subheadline.bold())
-                    .lineLimit(1)
-                Text("by \(entry.author)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            if let epi = entry.epigraph, !epi.isEmpty {
-                MarkdownRenderer.epigraphText(from: epi)
-                    .font(entry.isQuoteEpigraph ? .caption : .footnote)
-                    .foregroundStyle(entry.isQuoteEpigraph ? .secondary : .primary)
-                    .padding(.leading, entry.isQuoteEpigraph ? 16 : 6)
-                    .lineLimit(1)
-            }
-            Divider()
-            MarkdownRenderer.text(from: entry.excerpt)
-                .font(.caption)
-                .lineLimit(6)
-                .minimumScaleFactor(0.85)
         }
         .padding(14)
         .containerBackground(for: .widget) {
-            Color(.systemBackground)
+            Color.black.opacity(0.6)
         }
     }
 
-    // ── Large ──────────────────────────────────────────────
-    private var largeView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.title)
-                    .font(.headline)
-                    .lineLimit(2)
-                Text("by \(entry.author)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+    // ── First page: title, author, epigraph, poem ──────────
+    private var firstPageContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(entry.title)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(.white)
+                .lineLimit(2)
+
+            Spacer().frame(height: 2)
+
+            if !entry.author.isEmpty {
+                Text(entry.author)
+                    .font(.system(size: 13).italic())
+                    .foregroundStyle(.white)
             }
+
             if let epi = entry.epigraph, !epi.isEmpty {
+                Spacer().frame(height: 4)
                 MarkdownRenderer.epigraphText(from: epi)
-                    .font(entry.isQuoteEpigraph ? .footnote : .body)
-                    .foregroundStyle(entry.isQuoteEpigraph ? .secondary : .primary)
-                    .padding(.leading, entry.isQuoteEpigraph ? 20 : 8)
-                    .lineLimit(2)
+                    .font(.system(size: entry.isQuoteEpigraph ? 11 : 13))
+                    .foregroundStyle(.white.opacity(entry.isQuoteEpigraph ? 0.8 : 1.0))
+                    .padding(.leading, entry.isQuoteEpigraph ? 12 : 4)
             }
-            Divider()
+
+            Spacer().frame(height: 8)
+
             MarkdownRenderer.text(from: entry.excerpt)
-                .font(.body)
+                .font(.system(size: 12))
+                .foregroundStyle(.white)
                 .lineLimit(nil)
-                .minimumScaleFactor(0.8)
+
             Spacer(minLength: 0)
         }
-        .padding(16)
-        .containerBackground(for: .widget) {
-            Color(.systemBackground)
+    }
+
+    // ── Subsequent pages: poem only ────────────────────────
+    private var subsequentPageContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            MarkdownRenderer.text(from: entry.excerpt)
+                .font(.system(size: 12))
+                .foregroundStyle(.white)
+                .lineLimit(nil)
+
+            Spacer(minLength: 0)
         }
     }
 }
@@ -207,30 +162,21 @@ struct PoemOfTheDayWidget: Widget {
 // MARK: - Previews
 
 #if DEBUG
-#Preview("Small", as: .systemSmall) {
+#Preview("Page 1", as: .systemLarge) {
     PoemOfTheDayWidget()
 } timeline: {
     PoemEntry(date: .now, title: "The Road Not Taken", author: "Robert Frost",
-              excerpt: "Two roads diverged in a yellow wood,\nAnd sorry I could not travel both…",
+              excerpt: "Two roads diverged in a yellow wood,\nAnd sorry I could not travel both\nAnd be one traveler, long I stood\nAnd looked down one as far as I could\nTo where it bent in the undergrowth;\n\nThen took the other, as just as fair,",
               epigraph: nil, epigraphStyle: nil,
-              pageIndex: 1, totalPages: 2)
+              pageIndex: 1, totalPages: 3)
 }
 
-#Preview("Medium", as: .systemMedium) {
+#Preview("Page 2", as: .systemLarge) {
     PoemOfTheDayWidget()
 } timeline: {
     PoemEntry(date: .now, title: "The Road Not Taken", author: "Robert Frost",
-              excerpt: "Two roads diverged in a yellow wood,\nAnd sorry I could not travel both\nAnd be one traveler, long I stood\nAnd looked down one as far as I could\nTo where it bent in the undergrowth;",
+              excerpt: "And having perhaps the better claim,\nBecause it was grassy and wanted wear;\nThough as for that the passing there\nHad worn them really about the same,\n\nAnd both that morning equally lay\nIn leaves no step had trodden black.\nOh, I kept the first for another day!\nYet knowing how way leads on to way,\nI doubted if I should ever come back.",
               epigraph: nil, epigraphStyle: nil,
-              pageIndex: 1, totalPages: 2)
-}
-
-#Preview("Large", as: .systemLarge) {
-    PoemOfTheDayWidget()
-} timeline: {
-    PoemEntry(date: .now, title: "The Road Not Taken", author: "Robert Frost",
-              excerpt: "Two roads diverged in a yellow wood,\nAnd sorry I could not travel both\nAnd be one traveler, long I stood\nAnd looked down one as far as I could\nTo where it bent in the undergrowth;\n\nThen took the other, as just as fair,\nAnd having perhaps the better claim,\nBecause it was grassy and wanted wear;\nThough as for that the passing there\nHad worn them really about the same,",
-              epigraph: nil, epigraphStyle: nil,
-              pageIndex: 1, totalPages: 2)
+              pageIndex: 2, totalPages: 3)
 }
 #endif

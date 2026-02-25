@@ -1,8 +1,17 @@
 import Foundation
 
 enum PoemPaginator {
-    /// Split poem text into widget-sized pages by stanza boundaries.
-    static func paginate(text: String, maxChars: Int = 400, maxLines: Int = 14) -> [String] {
+    /// Split poem text into widget-sized pages by **line count**.
+    ///
+    /// - First page: `firstPageLines` lines (default 7) — title/author take space.
+    /// - Subsequent pages: `otherPageLines` lines (default 10).
+    ///
+    /// Blank lines between stanzas count as lines.
+    static func paginate(
+        text: String,
+        firstPageLines: Int = 7,
+        otherPageLines: Int = 10
+    ) -> [String] {
         let cleaned = text
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
@@ -10,38 +19,27 @@ enum PoemPaginator {
 
         guard !cleaned.isEmpty else { return ["No poem content."] }
 
-        let stanzas = cleaned
-            .components(separatedBy: "\n\n")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-
+        let allLines = cleaned.components(separatedBy: "\n")
         var pages: [String] = []
-        var buf: [String] = []
-        var lines = 0
-        var chars = 0
+        var idx = 0
 
-        func flush() {
-            let page = buf.joined(separator: "\n\n")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if !page.isEmpty { pages.append(page) }
-            buf.removeAll()
-            lines = 0
-            chars = 0
-        }
+        while idx < allLines.count {
+            let limit = pages.isEmpty ? firstPageLines : otherPageLines
+            let end = min(idx + limit, allLines.count)
+            let slice = Array(allLines[idx..<end])
 
-        for stanza in stanzas {
-            let sLines = stanza.components(separatedBy: "\n").count
-            let sChars = stanza.count
-            let sep = buf.isEmpty ? 0 : 2
-
-            if !buf.isEmpty && (lines + sLines > maxLines || chars + sChars + sep > maxChars) {
-                flush()
+            // Trim trailing blank lines from this page
+            var trimmed = slice
+            while let last = trimmed.last, last.trimmingCharacters(in: .whitespaces).isEmpty {
+                trimmed.removeLast()
             }
-            buf.append(stanza)
-            lines += sLines
-            chars += sChars + sep
+
+            let page = trimmed.joined(separator: "\n")
+            if !page.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                pages.append(page)
+            }
+            idx = end
         }
-        flush()
 
         return pages.isEmpty ? [cleaned] : pages
     }
