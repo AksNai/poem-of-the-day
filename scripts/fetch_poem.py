@@ -4,16 +4,23 @@ Strategy
 --------
 1. Use Jina Reader (r.jina.ai) to get a Markdown render of the
    Poem-of-the-Day landing page.  Extract the first poem URL.
-2. Fetch the individual poem page (again via Jina) and parse title,
-   author, and full poem text from the Markdown.
-3. Fall back to the allorigins CORS proxy when Jina is unavailable.
-4. If all network sources fail, keep the existing poem.json untouched.
+2. Fetch the raw HTML of the individual poem page via allorigins
+   proxy and extract the poem from the embedded __NUXT_DATA__
+   JSON.  This gives us the real formatting: <i>, <em>, <strong>,
+   <div style="font-style:italic"> (dedications/epigraphs), and
+   &nbsp; indentation.
+3. Convert the HTML to Markdown (_italic_, **bold**, preserved
+   whitespace).
+4. Fall back to Jina Markdown parsing when NUXT extraction fails.
+5. If all network sources fail, keep the existing poem.json untouched.
 
 Every response is decoded as UTF-8 explicitly to avoid mojibake.
 """
 
 import json
 import re
+from html import unescape
+from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import quote
 
@@ -110,6 +117,289 @@ def fetch_markdown(url: str) -> str:
     raise RuntimeError(
         f"All sources failed for {url}:\n" + "\n".join(errors)
     )
+
+
+def fetch_html(url: str) -> str | None:
+    """Fetch the raw HTML of *url* via CORS proxies.
+
+    Tries multiple free proxies with retry.  Returns ``None`` on failure.
+    """
+    import time
+    # Normalise to https
+    norm = re.sub(r"^http://", "https://", url, flags=re.I)
+
+    proxies = [
+        f"https://api.allorigins.win/raw?url={quote(norm, safe='')}",
+        f"https://api.codetabs.com/v1/proxy?quest={quote(norm, safe='')}",
+    ]
+
+    for proxy_url in proxies:
+        for attempt in range(2):
+            try:
+                return _get_text(proxy_url)
+            except Exception:
+                if attempt == 0:
+                    time.sleep(2)
+        # Small pause between proxies
+        time.sleep(1)
+
+    print("  fetch_html: all proxies failed")
+    return None
+
+
+# ---------------------------------------------------------------------------
+# HTML → Markdown converter  (for NUXT poem data)
+# ---------------------------------------------------------------------------
+
+class _PoemHTMLToMarkdown(HTMLParser):
+    """Convert a fragment of poem HTML to Markdown-flavoured text.
+
+    Handles:
+      <i>, <em>                        → _italic_
+      <b>, <strong>                    → **bold**
+      <div style="font-style:italic"> → _italic block_
+      <br>, <br/>                      → newline
+      <p>…</p>                         → paragraph break
+      &nbsp;                           → regular space
+      <span style="display:none">      → stripped (PF annotations)
+      <a href="…">text</a>            → text  (links stripped)
+      <span class="annotation">text    → text  (keep visible)
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.parts: list[str] = []
+        self._italic = 0          # nesting depth
+        self._bold = 0
+        self._hidden = 0          # inside display:none spans
+        self._tag_stack: list[tuple[str, dict]] = []
+
+    # -- helpers ----------------------------------------------------------
+
+    def _style(self, attrs: dict) -> str:
+        return attrs.get("style", "")
+
+    def _is_italic_style(self, style: str) -> bool:
+        return "font-style:italic" in style or "font-style: italic" in style
+
+    def _is_hidden_style(self, style: str) -> bool:
+        return "display:none" in style or "display: none" in style
+
+    # -- parser callbacks -------------------------------------------------
+
+    def handle_starttag(self, tag: str, attrs: list):
+        ad = dict(attrs)
+        style = self._style(ad)
+
+        # Hidden annotation text (Poetry Foundation uses this for glosses)
+        if self._is_hidden_style(style):
+            self._hidden += 1
+            self._tag_stack.append((tag, {"hidden_open": True}))
+            return
+
+        self._tag_stack.append((tag, ad))
+        if self._hidden:
+            return
+
+        if tag in ("i", "em"):
+            self.parts.append("_")
+            self._italic += 1
+        elif tag == "div" and self._is_italic_style(style):
+            self.parts.append("_")
+            self._italic += 1
+        elif tag in ("b", "strong"):
+            self.parts.append("**")
+            self._bold += 1
+        elif tag == "br":
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str):
+        # Pop the matching entry off the stack
+        popped = {}
+        if self._tag_stack:
+            ptag, pattrs = self._tag_stack.pop()
+            popped = pattrs
+            # Handle nesting: if we opened a hidden span, close it
+            if popped.get("hidden_open"):
+                self._hidden = max(0, self._hidden - 1)
+                return
+
+        if self._hidden:
+            return
+
+        if tag in ("i", "em"):
+            if self._italic > 0:
+                self.parts.append("_")
+                self._italic -= 1
+        elif tag == "div":
+            if self._italic > 0 and self._is_italic_style(self._style(popped)):
+                # Move trailing whitespace AFTER the closing marker
+                # so _text\n\n_ becomes _text_\n\n
+                trailing_ws = ""
+                while self.parts and self.parts[-1].strip() == "":
+                    trailing_ws = self.parts.pop() + trailing_ws
+                self.parts.append("_")
+                self._italic -= 1
+                if trailing_ws:
+                    self.parts.append(trailing_ws)
+        elif tag in ("b", "strong"):
+            if self._bold > 0:
+                self.parts.append("**")
+                self._bold -= 1
+        elif tag == "p":
+            self.parts.append("\n\n")
+
+    def handle_data(self, data: str):
+        if not self._hidden:
+            self.parts.append(data)
+
+    def handle_entityref(self, name: str):
+        if not self._hidden:
+            if name == "nbsp":
+                self.parts.append(" ")
+            elif name in ("mdash", "#8212"):
+                self.parts.append("—")
+            elif name in ("ndash", "#8211"):
+                self.parts.append("–")
+            elif name in ("ldquo", "rdquo", "lsquo", "rsquo"):
+                mapping = {"ldquo": "\u201c", "rdquo": "\u201d",
+                           "lsquo": "\u2018", "rsquo": "\u2019"}
+                self.parts.append(mapping.get(name, "'"))
+            else:
+                self.parts.append(unescape(f"&{name};"))
+
+    def handle_charref(self, name: str):
+        if not self._hidden:
+            try:
+                if name.startswith("x"):
+                    self.parts.append(chr(int(name[1:], 16)))
+                else:
+                    self.parts.append(chr(int(name)))
+            except (ValueError, OverflowError):
+                self.parts.append(f"&#{name};")
+
+    def get_markdown(self) -> str:
+        return "".join(self.parts)
+
+
+def html_to_markdown(html_fragment: str) -> str:
+    """Convert a poem HTML fragment to Markdown with formatting."""
+    parser = _PoemHTMLToMarkdown()
+    parser.feed(html_fragment)
+    text = parser.get_markdown()
+
+    # Normalise whitespace: collapse runs of 3+ newlines → 2
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    # Trim trailing whitespace on each line (PF sometimes has trailing &nbsp;)
+    text = "\n".join(ln.rstrip() for ln in text.splitlines())
+
+    return text.strip()
+
+
+# ---------------------------------------------------------------------------
+# NUXT data extraction
+# ---------------------------------------------------------------------------
+
+def extract_poem_from_nuxt(page_html: str) -> str | None:
+    """Extract the poem body as Markdown from __NUXT_DATA__ in *page_html*.
+
+    Returns the poem body string (with Markdown formatting) or None.
+    """
+    m = re.search(
+        r'<script[^>]*id="__NUXT_DATA__"[^>]*>(.*?)</script>',
+        page_html,
+        re.S,
+    )
+    if not m:
+        return None
+
+    try:
+        data = json.loads(m.group(1))
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+    # 1. Find the poem body <p> element.
+    #    Poems have a HIGH ratio of <br> tags to text length (short lines)
+    #    and typically no visible <a> links.  Prose passages (bios, essays)
+    #    have low br-ratio and contain hyperlinks.
+    #
+    #    Exception: some poems (e.g. The Waste Land) have <a> links inside
+    #    hidden annotation <span style="display:none"> — we don't count those.
+    best_html = ""
+    best_score = -1.0
+
+    for item in data:
+        if not isinstance(item, str):
+            continue
+        if not item.lstrip().startswith("<p") or item.count("<br") < 3:
+            continue
+
+        text = re.sub(r"<[^>]+>", "", item)
+        text = re.sub(r"&\w+;", " ", text)
+        text_len = len(text.strip())
+        if text_len < 50:
+            continue
+
+        br_count = item.count("<br")
+        br_ratio = br_count / max(1, text_len)
+
+        # Check for visible links (links NOT inside display:none spans).
+        # PF annotation spans look like:
+        #   <span style="display:none;">...<a href="...">...</a>...</span>
+        # Strip those hidden sections first, then check for remaining <a>.
+        visible = re.sub(
+            r'<span[^>]*display:\s*none[^>]*>.*?</span>',
+            "", item, flags=re.S | re.I,
+        )
+        has_visible_links = "<a " in visible
+
+        # Poems: high br_ratio (≥ 0.005), no visible links
+        # Prose: low br_ratio, has visible links
+        if has_visible_links and br_ratio < 0.01:
+            continue                    # Definitely prose
+        if br_ratio < 0.003:
+            continue                    # Too few line breaks for a poem
+
+        # Among remaining candidates, prefer the longest one
+        # (short ones might be excerpts).  Bonus for high br_ratio.
+        score = text_len * (1 + br_ratio * 100)
+        if score > best_score:
+            best_score = score
+            best_html = item
+
+    if not best_html:
+        return None
+
+    # 2. Find epigraph / dedication: <div style="font-style:italic">
+    #    These are short italic blocks (dedications like "(for Harlem Magic)")
+    epigraph = ""
+    for item in data:
+        if not isinstance(item, str):
+            continue
+        if re.match(
+            r'<div\s[^>]*font-style:\s*italic[^>]*>',
+            item, re.I,
+        ):
+            text = html_to_markdown(item)
+            # Dedications/epigraphs are short; skip long prose passages
+            if text and len(text) < 300:
+                # The html_to_markdown already wraps it in _..._
+                epigraph = text
+
+    # 3. Convert poem body HTML → Markdown
+    body = html_to_markdown(best_html)
+    if not body:
+        return None
+
+    # 4. Combine: epigraph + body (if epigraph not already in body)
+    if epigraph:
+        # Check the epigraph text isn't already embedded in the body
+        plain_epi = epigraph.replace("_", "").replace("*", "").strip()
+        if plain_epi not in body.replace("_", "").replace("*", ""):
+            body = epigraph + "\n\n" + body
+
+    return body
 
 
 # ---------------------------------------------------------------------------
@@ -296,13 +586,33 @@ def main() -> None:
 
     print(f"Poem URL: {poem_url}")
 
-    # 3. Fetch & parse the poem page
+    # 3. Fetch the poem page via Jina (for title/author, and fallback body)
     poem_md = fetch_markdown(poem_url)
-    data = parse_poem_markdown(poem_md)
+    jina_data = parse_poem_markdown(poem_md)
+
+    # 4. Try NUXT HTML extraction for rich formatting of the body
+    data = None
+    page_html = fetch_html(poem_url)
+    if page_html:
+        nuxt_body = extract_poem_from_nuxt(page_html)
+        if nuxt_body:
+            data = {
+                "title": jina_data["title"],
+                "author": jina_data["author"],
+                "poem": nuxt_body,
+            }
+            if is_valid(data):
+                print("  (used NUXT HTML for rich formatting)")
+            else:
+                data = None
+
+    # 5. Fall back to Jina-only parsing
+    if data is None or not is_valid(data):
+        data = jina_data
+        print("  (used Jina Markdown)")
 
     if not is_valid(data):
         # Last resort: try parsing the landing page markdown itself
-        # (sometimes Jina inlines the full poem there)
         data = parse_poem_markdown(pod_md)
 
     if not is_valid(data):
@@ -317,7 +627,7 @@ def main() -> None:
                 pass
         raise RuntimeError("Could not extract poem text; poem.json was not updated.")
 
-    # 4. Write output
+    # 6. Write output
     OUT_FILE.write_text(
         json.dumps(data, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
