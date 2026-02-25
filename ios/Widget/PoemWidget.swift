@@ -6,12 +6,9 @@ import AppIntents
 
 /// Provides a dropdown of available page numbers (1…N) based on today's poem.
 struct PoemPageOptionsProvider: DynamicOptionsProvider {
-    func results() async throws -> ItemCollection<Int> {
+    func results() async throws -> [Int] {
         let paged = PoemStore.loadPagedPoem()
-        let items = (1...max(1, paged.pages.count)).map { num in
-            IntentItem<Int>(num, title: "Page \(num)")
-        }
-        return ItemCollection(items: items)
+        return Array(1...max(1, paged.pages.count))
     }
 }
 
@@ -20,7 +17,7 @@ struct PoemPageIntent: WidgetConfigurationIntent {
     static var title: LocalizedStringResource = "Poem Page"
     static var description = IntentDescription("Choose which page of today's poem to display.")
 
-    @Parameter(title: "Page", description: "Page of the poem", default: 1, requestValueDialog: "Which page?", inputConnectionBehavior: .default, optionsProvider: PoemPageOptionsProvider())
+    @Parameter(title: "Page", description: nil, default: 1, requestValueDialog: nil, inputConnectionBehavior: .default, optionsProvider: PoemPageOptionsProvider())
     var page: Int
 }
 
