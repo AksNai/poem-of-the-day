@@ -96,10 +96,10 @@ struct PoemWidgetEntryView: View {
         }
     }
 
-    // Serif font helpers
-    private static let titleFont = Font.custom("Georgia-Bold", size: 16)
-    private static let authorFont = Font.custom("Georgia", size: 13).italic()
-    private static let poemFont  = Font.custom("Georgia", size: 12)
+    // Serif font helpers — "Georgia" is a built-in iOS font
+    private static let titleFont = Font.custom("Georgia", fixedSize: 16).bold()
+    private static let authorFont = Font.custom("Georgia", fixedSize: 13).italic()
+    private static let poemFont  = Font.custom("Georgia", fixedSize: 12)
 
     // ── First page: title, author, epigraph, poem ──────────
     private var firstPageContent: some View {
@@ -120,7 +120,7 @@ struct PoemWidgetEntryView: View {
             if let epi = entry.epigraph, !epi.isEmpty {
                 Spacer().frame(height: 4)
                 MarkdownRenderer.epigraphText(from: epi)
-                    .font(.custom("Georgia", size: entry.isQuoteEpigraph ? 11 : 13))
+                    .font(.custom("Georgia", fixedSize: entry.isQuoteEpigraph ? 11 : 13))
                     .foregroundStyle(.white.opacity(entry.isQuoteEpigraph ? 0.8 : 1.0))
                     .padding(.leading, entry.isQuoteEpigraph ? 12 : 4)
             }
@@ -162,7 +162,7 @@ struct PoemOfTheDayWidget: Widget {
         }
         .configurationDisplayName("Poem of the Day")
         .description("Displays today's poem. Add multiple widgets and set each to a different page.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .supportedFamilies([.systemMedium])
     }
 }
 
