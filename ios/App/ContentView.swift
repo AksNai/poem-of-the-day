@@ -19,7 +19,7 @@ struct ContentView: View {
                     // Epigraph / dedication (e.g. "(for Harlem Magic)")
                     if let epigraph = pagedPoem.poem.epigraph, !epigraph.isEmpty {
                         MarkdownRenderer.epigraphText(from: epigraph)
-                            .font(.title3)
+                            .font(.body)
                             .padding(.leading, 24)
                             .padding(.top, 4)
                     }

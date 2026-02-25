@@ -166,7 +166,7 @@ struct PoemWidgetEntryView: View {
             }
             if let epi = entry.epigraph, !epi.isEmpty {
                 MarkdownRenderer.epigraphText(from: epi)
-                    .font(.title3)
+                    .font(.body)
                     .padding(.leading, 20)
                     .lineLimit(2)
             }

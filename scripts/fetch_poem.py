@@ -299,11 +299,13 @@ def html_to_markdown(html_fragment: str) -> str:
     parser.feed(html_fragment)
     text = parser.get_markdown()
 
-    # Normalise whitespace: collapse runs of 3+ newlines → 2
-    text = re.sub(r"\n{3,}", "\n\n", text)
-
     # Trim trailing whitespace on each line (PF sometimes has trailing &nbsp;)
     text = "\n".join(ln.rstrip() for ln in text.splitlines())
+
+    # Normalise stanza breaks: PF uses <p>&nbsp;</p> as visual
+    # spacers which produce lines containing only whitespace/nbsp.
+    # Collapse any run of blank-looking lines to a single blank line.
+    text = re.sub(r"(\n[ \t\xa0]*){2,}", "\n\n", text)
 
     return text.strip()
 
