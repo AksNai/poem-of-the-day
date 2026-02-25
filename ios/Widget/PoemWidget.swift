@@ -94,8 +94,8 @@ struct PoemWidgetEntryView: View {
                 .lineLimit(1)
             if let epi = entry.epigraph, !epi.isEmpty {
                 MarkdownRenderer.epigraphText(from: epi)
-                    .font(entry.isQuoteEpigraph ? .caption : .caption2)
-                    .foregroundStyle(entry.isQuoteEpigraph ? .primary : .secondary)
+                    .font(entry.isQuoteEpigraph ? .caption2 : .caption)
+                    .foregroundStyle(entry.isQuoteEpigraph ? .secondary : .primary)
                     .padding(.leading, entry.isQuoteEpigraph ? 10 : 4)
                     .lineLimit(1)
             }
@@ -133,8 +133,8 @@ struct PoemWidgetEntryView: View {
             }
             if let epi = entry.epigraph, !epi.isEmpty {
                 MarkdownRenderer.epigraphText(from: epi)
-                    .font(entry.isQuoteEpigraph ? .footnote : .caption)
-                    .foregroundStyle(entry.isQuoteEpigraph ? .primary : .secondary)
+                    .font(entry.isQuoteEpigraph ? .caption : .footnote)
+                    .foregroundStyle(entry.isQuoteEpigraph ? .secondary : .primary)
                     .padding(.leading, entry.isQuoteEpigraph ? 16 : 6)
                     .lineLimit(1)
             }
@@ -172,8 +172,8 @@ struct PoemWidgetEntryView: View {
             }
             if let epi = entry.epigraph, !epi.isEmpty {
                 MarkdownRenderer.epigraphText(from: epi)
-                    .font(entry.isQuoteEpigraph ? .body : .footnote)
-                    .foregroundStyle(entry.isQuoteEpigraph ? .primary : .secondary)
+                    .font(entry.isQuoteEpigraph ? .footnote : .body)
+                    .foregroundStyle(entry.isQuoteEpigraph ? .secondary : .primary)
                     .padding(.leading, entry.isQuoteEpigraph ? 20 : 8)
                     .lineLimit(2)
             }

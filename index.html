@@ -82,17 +82,17 @@
         white-space: pre-wrap;
       }
 
-      /* Short dedication — smaller, subtler (e.g. "(for Harlem Magic)") */
+      /* Short dedication — larger, prominent (e.g. "(for Harlem Magic)") */
       .epigraph.epigraph-dedication {
-        font-size: 0.9rem;
-        color: var(--muted);
+        font-size: 1.15rem;
         padding-left: 0.5rem;
         margin-bottom: 0.75em;
       }
 
-      /* Substantive quote — body-sized (e.g. a Paul Celan quote) */
+      /* Substantive quote — body-sized, subtler (e.g. a Paul Celan quote) */
       .epigraph.epigraph-quote {
-        font-size: 1.05rem;
+        font-size: 0.95rem;
+        color: var(--muted);
         padding-left: 1.5rem;
         margin-bottom: 1.1em;
       }
@@ -115,8 +115,8 @@
       @media (max-width: 480px) {
         body { padding: 2rem 1rem; }
         h1 { font-size: 1.35rem; }
-        .epigraph.epigraph-dedication { font-size: 0.82rem; }
-        .epigraph.epigraph-quote { font-size: 0.95rem; padding-left: 1rem; }
+        .epigraph.epigraph-dedication { font-size: 1.05rem; }
+        .epigraph.epigraph-quote { font-size: 0.88rem; padding-left: 1rem; }
         .poem-body { font-size: 0.95rem; line-height: 1.65; }
       }
     </style>
