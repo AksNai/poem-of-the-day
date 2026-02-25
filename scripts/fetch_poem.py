@@ -359,6 +359,46 @@ def _extract_epigraph_from_page(page_html: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Epigraph style classification
+# ---------------------------------------------------------------------------
+
+def _classify_epigraph(text: str) -> str:
+    """Classify an epigraph as ``"dedication"`` or ``"quote"``.
+
+    **Dedication** — short, parenthetical, e.g. "(for Harlem Magic)",
+    "for my mother", "in memoriam".  Rendered smaller/subtler.
+
+    **Quote** — substantive text with or without attribution (em-dash
+    line), e.g. a multi-line Paul Celan quote.  Rendered at body size.
+
+    Heuristic:
+    - Has an attribution line (starts with — or --)  → quote
+    - Multi-line (contains \\n)                      → quote
+    - Longer than 80 characters                      → quote
+    - Otherwise                                      → dedication
+    """
+    stripped = text.strip()
+    lines = stripped.splitlines()
+
+    # Attribution line (e.g. "— Paul Celan") → quote
+    for ln in lines:
+        s = ln.strip()
+        if s.startswith("—") or s.startswith("--") or s.startswith("– "):
+            return "quote"
+
+    # Multi-line → quote
+    real_lines = [ln for ln in lines if ln.strip()]
+    if len(real_lines) > 1:
+        return "quote"
+
+    # Long single line → quote
+    if len(stripped) > 80:
+        return "quote"
+
+    return "dedication"
+
+
+# ---------------------------------------------------------------------------
 # NUXT data extraction
 # ---------------------------------------------------------------------------
 
@@ -471,6 +511,7 @@ def extract_poem_from_nuxt(page_html: str) -> str | None:
         plain_epi = epigraph.replace("_", "").replace("*", "").strip()
         if plain_epi not in body.replace("_", "").replace("*", ""):
             result["epigraph"] = epigraph
+            result["epigraphStyle"] = _classify_epigraph(epigraph)
 
     return result
 
@@ -677,6 +718,7 @@ def main() -> None:
             }
             if nuxt_result.get("epigraph"):
                 data["epigraph"] = nuxt_result["epigraph"]
+                data["epigraphStyle"] = nuxt_result.get("epigraphStyle", "dedication")
             if is_valid(data):
                 print("  (used NUXT HTML for rich formatting)")
             else:

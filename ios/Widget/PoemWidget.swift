@@ -9,8 +9,11 @@ struct PoemEntry: TimelineEntry {
     let author: String
     let excerpt: String          // fits the current widget size
     let epigraph: String?        // dedication / epigraph (e.g. "(for Harlem Magic)")
+    let epigraphStyle: String?   // "dedication" or "quote"
     let pageIndex: Int
     let totalPages: Int
+
+    var isQuoteEpigraph: Bool { epigraphStyle == "quote" }
 }
 
 // MARK: - Timeline Provider
@@ -23,7 +26,7 @@ struct PoemTimelineProvider: TimelineProvider {
             date: .now,
             title: "Poem of the Day",
             author: "Loading…",
-            excerpt: "A new poem every day\nright on your home screen.",            epigraph: nil,            pageIndex: 1,
+            excerpt: "A new poem every day\nright on your home screen.",            epigraph: nil,            epigraphStyle: nil,            pageIndex: 1,
             totalPages: 1
         )
     }
@@ -53,6 +56,7 @@ struct PoemTimelineProvider: TimelineProvider {
             author: paged.poem.author,
             excerpt: page,
             epigraph: paged.poem.epigraph,
+            epigraphStyle: paged.poem.epigraphStyle,
             pageIndex: 1,
             totalPages: paged.pages.count
         )
@@ -90,8 +94,9 @@ struct PoemWidgetEntryView: View {
                 .lineLimit(1)
             if let epi = entry.epigraph, !epi.isEmpty {
                 MarkdownRenderer.epigraphText(from: epi)
-                    .font(.caption)
-                    .padding(.leading, 10)
+                    .font(entry.isQuoteEpigraph ? .caption : .caption2)
+                    .foregroundStyle(entry.isQuoteEpigraph ? .primary : .secondary)
+                    .padding(.leading, entry.isQuoteEpigraph ? 10 : 4)
                     .lineLimit(1)
             }
             Spacer(minLength: 2)
@@ -128,8 +133,9 @@ struct PoemWidgetEntryView: View {
             }
             if let epi = entry.epigraph, !epi.isEmpty {
                 MarkdownRenderer.epigraphText(from: epi)
-                    .font(.footnote)
-                    .padding(.leading, 16)
+                    .font(entry.isQuoteEpigraph ? .footnote : .caption)
+                    .foregroundStyle(entry.isQuoteEpigraph ? .primary : .secondary)
+                    .padding(.leading, entry.isQuoteEpigraph ? 16 : 6)
                     .lineLimit(1)
             }
             Divider()
@@ -166,8 +172,9 @@ struct PoemWidgetEntryView: View {
             }
             if let epi = entry.epigraph, !epi.isEmpty {
                 MarkdownRenderer.epigraphText(from: epi)
-                    .font(.body)
-                    .padding(.leading, 20)
+                    .font(entry.isQuoteEpigraph ? .body : .footnote)
+                    .foregroundStyle(entry.isQuoteEpigraph ? .primary : .secondary)
+                    .padding(.leading, entry.isQuoteEpigraph ? 20 : 8)
                     .lineLimit(2)
             }
             Divider()
@@ -206,7 +213,7 @@ struct PoemOfTheDayWidget: Widget {
     PoemOfTheDayWidget()
 } timeline: {
     PoemEntry(date: .now, title: "The Road Not Taken", author: "Robert Frost",
-              excerpt: "Two roads diverged in a yellow wood,\nAnd sorry I could not travel both…",              epigraph: nil,              pageIndex: 1, totalPages: 2)
+              excerpt: "Two roads diverged in a yellow wood,\nAnd sorry I could not travel both…",              epigraph: nil,              epigraphStyle: nil,              pageIndex: 1, totalPages: 2)
 }
 
 #Preview("Medium", as: .systemMedium) {
@@ -215,6 +222,7 @@ struct PoemOfTheDayWidget: Widget {
     PoemEntry(date: .now, title: "The Road Not Taken", author: "Robert Frost",
               excerpt: "Two roads diverged in a yellow wood,\nAnd sorry I could not travel both\nAnd be one traveler, long I stood\nAnd looked down one as far as I could\nTo where it bent in the undergrowth;",
               epigraph: nil,
+              epigraphStyle: nil,
               pageIndex: 1, totalPages: 2)
 }
 
@@ -224,6 +232,7 @@ struct PoemOfTheDayWidget: Widget {
     PoemEntry(date: .now, title: "The Road Not Taken", author: "Robert Frost",
               excerpt: "Two roads diverged in a yellow wood,\nAnd sorry I could not travel both\nAnd be one traveler, long I stood\nAnd looked down one as far as I could\nTo where it bent in the undergrowth;\n\nThen took the other, as just as fair,\nAnd having perhaps the better claim,\nBecause it was grassy and wanted wear;\nThough as for that the passing there\nHad worn them really about the same,",
               epigraph: nil,
+              epigraphStyle: nil,
               pageIndex: 1, totalPages: 2)
 }
 #endif
