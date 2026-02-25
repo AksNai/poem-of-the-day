@@ -4,12 +4,20 @@ import AppIntents
 
 // MARK: - Widget Configuration Intent
 
-/// Users long-press → Edit Widget → pick the page number for this instance.
+/// Provides a dropdown of available page numbers (1…N) based on today's poem.
+struct PoemPageOptionsProvider: DynamicOptionsProvider {
+    func results() async throws -> [Int] {
+        let paged = PoemStore.loadPagedPoem()
+        return Array(1...max(1, paged.pages.count))
+    }
+}
+
+/// Users long-press → Edit Widget → pick the page number from a dropdown.
 struct PoemPageIntent: WidgetConfigurationIntent {
     static var title: LocalizedStringResource = "Poem Page"
     static var description = IntentDescription("Choose which page of today's poem to display.")
 
-    @Parameter(title: "Page", default: 1)
+    @Parameter(title: "Page", default: 1, optionsProvider: PoemPageOptionsProvider())
     var page: Int
 }
 
@@ -122,7 +130,7 @@ struct PoemWidgetEntryView: View {
                 if entry.isQuoteEpigraph {
                     MarkdownRenderer.epigraphText(from: epigraph)
                         .font(Font.custom("Georgia", fixedSize: 11.5).italic())
-                        .foregroundStyle(.white.opacity(0.85))
+                        .foregroundStyle(.white.opacity(0.7))
                         .lineLimit(2)
                 } else {
                     Text(epigraph)
