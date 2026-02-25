@@ -90,7 +90,8 @@ struct PoemWidgetEntryView: View {
                 subsequentPageContent
             }
         }
-        .padding(14)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 14)
         .containerBackground(for: .widget) {
             Color.black.opacity(0.6)
         }
@@ -101,7 +102,7 @@ struct PoemWidgetEntryView: View {
     private static let authorFont = Font.custom("Georgia", fixedSize: 11).italic()
     private static let poemFont  = Font.custom("Georgia", fixedSize: 11)
 
-    // ── First page: title, author, poem ──────────────────
+    // ── First page: title, author, epigraph, poem ───────
     private var firstPageContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(entry.title)
@@ -116,7 +117,22 @@ struct PoemWidgetEntryView: View {
                     .foregroundStyle(.white.opacity(0.85))
             }
 
-            Spacer().frame(height: 6)
+            if let epigraph = entry.epigraph, !epigraph.isEmpty {
+                Spacer().frame(height: 3)
+                if entry.isQuoteEpigraph {
+                    MarkdownRenderer.epigraphText(from: epigraph)
+                        .font(Font.custom("Georgia", fixedSize: 10).italic())
+                        .foregroundStyle(.white.opacity(0.7))
+                        .lineLimit(2)
+                } else {
+                    Text(epigraph)
+                        .font(Font.custom("Georgia", fixedSize: 11).italic())
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer().frame(height: 5)
 
             MarkdownRenderer.text(from: entry.excerpt)
                 .font(Self.poemFont)
