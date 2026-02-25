@@ -4,12 +4,17 @@ import AppIntents
 
 // MARK: - Widget Configuration Intent
 
-/// Provides a dropdown of available page numbers (1…N) based on today's poem.
-struct PoemPageOptionsProvider: DynamicOptionsProvider {
-    func results() async throws -> [Int] {
-        let paged = PoemStore.loadPagedPoem()
-        return Array(1...max(1, paged.pages.count))
-    }
+/// AppEnum gives a native dropdown picker in the widget edit UI.
+/// 15 pages is generous — most poems fit in 5–10 medium-widget pages.
+enum PoemPage: Int, AppEnum {
+    case p1 = 1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15
+
+    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Page")
+    static var caseDisplayRepresentations: [PoemPage: DisplayRepresentation] = [
+        .p1: "1", .p2: "2", .p3: "3", .p4: "4", .p5: "5",
+        .p6: "6", .p7: "7", .p8: "8", .p9: "9", .p10: "10",
+        .p11: "11", .p12: "12", .p13: "13", .p14: "14", .p15: "15"
+    ]
 }
 
 /// Users long-press → Edit Widget → pick the page number from a dropdown.
@@ -17,8 +22,8 @@ struct PoemPageIntent: WidgetConfigurationIntent {
     static var title: LocalizedStringResource = "Poem Page"
     static var description = IntentDescription("Choose which page of today's poem to display.")
 
-    @Parameter(title: "Page", description: nil, default: 1, requestValueDialog: nil, inputConnectionBehavior: .default, optionsProvider: PoemPageOptionsProvider())
-    var page: Int
+    @Parameter(title: "Page", default: .p1)
+    var page: PoemPage
 }
 
 // MARK: - Timeline Entry
@@ -55,12 +60,12 @@ struct PoemTimelineProvider: AppIntentTimelineProvider {
     }
 
     func snapshot(for configuration: PoemPageIntent, in context: Context) async -> PoemEntry {
-        makeEntry(from: PoemStore.loadPagedPoem(), requestedPage: configuration.page)
+        makeEntry(from: PoemStore.loadPagedPoem(), requestedPage: configuration.page.rawValue)
     }
 
     func timeline(for configuration: PoemPageIntent, in context: Context) async -> Timeline<PoemEntry> {
         let paged = await PoemStore.loadPagedPoemRemote()
-        let entry = makeEntry(from: paged, requestedPage: configuration.page)
+        let entry = makeEntry(from: paged, requestedPage: configuration.page.rawValue)
         let nextRefresh = Calendar.current.date(byAdding: .minute, value: 30, to: .now) ?? .now
         return Timeline(entries: [entry], policy: .after(nextRefresh))
     }
