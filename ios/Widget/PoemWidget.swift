@@ -151,8 +151,7 @@ struct PoemWidgetEntryView: View {
 
             Spacer().frame(height: 5)
 
-
-            poemLinesView
+            stanzaStack
 
             Spacer(minLength: 0)
         }
@@ -161,8 +160,7 @@ struct PoemWidgetEntryView: View {
     // ── Subsequent pages: poem only ────────────────────────
     private var subsequentPageContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-
-            poemLinesView
+            stanzaStack
 
             Spacer(minLength: 0)
         }
@@ -170,22 +168,21 @@ struct PoemWidgetEntryView: View {
 
     /// Splits the excerpt at blank lines and renders each stanza with
     /// 5pt gaps (matching the epigraph → body spacing).
-    /// Renders each line of the excerpt, using 5pt spacing for blank lines (matching epigraph-body gap).
-    private var poemLinesView: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            let lines = entry.excerpt.split(separator: "\n", omittingEmptySubsequences: false)
-            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                if line.trimmingCharacters(in: .whitespaces).isEmpty {
-                    Spacer().frame(height: 5)
-                } else {
-                    MarkdownRenderer.text(from: String(line))
-                        .font(Self.poemFont)
-                        .foregroundStyle(.white)
-                        .lineLimit(nil)
-                }
+    /// Splits the excerpt at blank lines and renders each stanza with
+    /// 5pt gaps (matching the epigraph → body spacing).
+    private var stanzaStack: some View {
+        let stanzas = entry.excerpt
+            .components(separatedBy: "\n\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+
+        return VStack(alignment: .leading, spacing: 5) {
+            ForEach(Array(stanzas.enumerated()), id: \.offset) { _, stanza in
+                MarkdownRenderer.text(from: stanza)
+                    .font(Self.poemFont)
+                    .foregroundStyle(.white)
+                    .lineLimit(nil)
             }
         }
-    }
     }
 }
 
