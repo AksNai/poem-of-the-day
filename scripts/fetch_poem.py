@@ -251,7 +251,12 @@ class _PoemHTMLToMarkdown(HTMLParser):
 
     def handle_data(self, data: str):
         if not self._hidden:
-            self.parts.append(data)
+            # Strip literal \r\n from source HTML — line breaks are
+            # handled by <br> tags; the \r\n after <br> in PF's HTML
+            # is just source formatting, not meaningful whitespace.
+            cleaned = data.replace('\r\n', '').replace('\r', '').replace('\n', '')
+            if cleaned:
+                self.parts.append(cleaned)
 
     def handle_entityref(self, name: str):
         if not self._hidden:
