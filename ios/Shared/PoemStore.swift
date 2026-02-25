@@ -1,103 +1,70 @@
 import Foundation
 
 enum PoemStore {
-    private static let cachedPoemKey = "cachedPoemJSON"
+    private static let cacheKey = "cachedPoemJSON"
 
-    static func loadPoemRemoteFirst() async -> PoemData {
-        if let remote = await fetchRemotePoem() {
-            saveCachedPoem(remote)
-            return remote
-        }
-
-        if let cached = loadCachedPoem() {
-            return cached
-        }
-
-        return loadPoem()
-    }
-
-    static func loadPagedPoemRemoteFirst() async -> PagedPoem {
-        let poem = await loadPoemRemoteFirst()
-        let pages = PoemPaginator.paginate(poem: poem.poem)
-        return PagedPoem(poem: poem, pages: pages)
-    }
-
-    static func loadPoem() -> PoemData {
-        guard let url = Bundle.main.url(forResource: "poem", withExtension: "json") else {
-            return .placeholder
-        }
-
-        do {
-            let data = try Data(contentsOf: url)
-            if let decoded = decodePoemData(data) {
-                return decoded
-            }
-            return .placeholder
-        } catch {
-            return .placeholder
-        }
-    }
+    // MARK: - Public
 
     static func loadPagedPoem() -> PagedPoem {
-        let poem = loadPoem()
-        let pages = PoemPaginator.paginate(poem: poem.poem)
-        return PagedPoem(poem: poem, pages: pages)
+        let poem = loadBundled()
+        return PagedPoem(poem: poem, pages: PoemPaginator.paginate(text: poem.poem))
     }
 
-    private static func fetchRemotePoem() async -> PoemData? {
+    static func loadPagedPoemRemote() async -> PagedPoem {
+        let poem = await remoteFirst()
+        return PagedPoem(poem: poem, pages: PoemPaginator.paginate(text: poem.poem))
+    }
+
+    // MARK: - Internal
+
+    private static func remoteFirst() async -> PoemData {
+        if let remote = await fetchRemote() {
+            cache(remote)
+            return remote
+        }
+        if let cached = loadCached() { return cached }
+        return loadBundled()
+    }
+
+    private static func fetchRemote() async -> PoemData? {
         guard
-            let urlString = Bundle.main.object(forInfoDictionaryKey: "PoemRemoteURL") as? String,
-            let remoteURL = URL(string: urlString),
-            !urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else {
-            return nil
-        }
+            let urlStr = Bundle.main.object(forInfoDictionaryKey: "PoemRemoteURL") as? String,
+            let url = URL(string: urlStr)
+        else { return nil }
 
-        var request = URLRequest(url: remoteURL)
-        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-        request.timeoutInterval = 20
+        var req = URLRequest(url: url)
+        req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        req.timeoutInterval = 15
 
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
-                return nil
-            }
+        guard
+            let (data, resp) = try? await URLSession.shared.data(for: req),
+            let http = resp as? HTTPURLResponse,
+            (200...299).contains(http.statusCode)
+        else { return nil }
 
-            return decodePoemData(data)
-        } catch {
-            return nil
-        }
+        return decode(data)
     }
 
-    private static func decodePoemData(_ data: Data) -> PoemData? {
-        do {
-            let decoded = try JSONDecoder().decode(PoemData.self, from: data)
-            return sanitize(decoded)
-        } catch {
-            return nil
-        }
+    private static func loadBundled() -> PoemData {
+        guard
+            let url = Bundle.main.url(forResource: "poem", withExtension: "json"),
+            let data = try? Data(contentsOf: url),
+            let poem = decode(data)
+        else { return .placeholder }
+        return poem
     }
 
-    private static func sanitize(_ poem: PoemData) -> PoemData {
-        let cleaned = PoemData(
-            title: poem.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Poem of the Day" : poem.title,
-            author: poem.author.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Unknown" : poem.author,
-            poem: poem.poem.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? PoemData.placeholder.poem : poem.poem
-        )
-        return cleaned
+    private static func decode(_ data: Data) -> PoemData? {
+        try? JSONDecoder().decode(PoemData.self, from: data)
     }
 
-    private static func saveCachedPoem(_ poem: PoemData) {
-        guard let encoded = try? JSONEncoder().encode(poem) else {
-            return
-        }
-        UserDefaults.standard.set(encoded, forKey: cachedPoemKey)
+    private static func cache(_ poem: PoemData) {
+        guard let data = try? JSONEncoder().encode(poem) else { return }
+        UserDefaults.standard.set(data, forKey: cacheKey)
     }
 
-    private static func loadCachedPoem() -> PoemData? {
-        guard let data = UserDefaults.standard.data(forKey: cachedPoemKey) else {
-            return nil
-        }
-        return decodePoemData(data)
+    private static func loadCached() -> PoemData? {
+        guard let data = UserDefaults.standard.data(forKey: cacheKey) else { return nil }
+        return decode(data)
     }
 }

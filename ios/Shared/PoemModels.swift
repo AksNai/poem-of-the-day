@@ -8,7 +8,7 @@ struct PoemData: Codable {
     static let placeholder = PoemData(
         title: "Poem of the Day",
         author: "Unknown",
-        poem: "No poem content available yet."
+        poem: "No poem available yet.\nCheck back soon."
     )
 }
 

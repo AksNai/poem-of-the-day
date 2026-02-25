@@ -2,216 +2,98 @@ name: Build iOS Widget IPA
 
 on:
   workflow_dispatch:
-    inputs:
-      project_path:
-        description: "Path to .xcodeproj (leave empty to auto-detect or generate from project.yml)"
-        required: false
-        type: string
-      scheme:
-        description: "Shared scheme to build (leave empty to auto-detect first shared scheme)"
-        required: false
-        type: string
-      generate_from_xcodegen:
-        description: "Generate .xcodeproj from project.yml"
-        required: false
-        default: true
-        type: boolean
-      configuration:
-        description: "Build configuration"
-        required: false
-        default: "Release"
-        type: choice
-        options:
-          - Release
-          - Debug
 
 permissions:
   contents: read
 
 jobs:
-  build-unsigned-ipa:
+  build:
     runs-on: macos-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
       - name: Install XcodeGen
-        if: ${{ inputs.generate_from_xcodegen }}
-        shell: bash
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Show schemes
+        run: xcodebuild -project PoemOfTheDay.xcodeproj -list
+
+      - name: Build unsigned
         run: |
-          set -euo pipefail
-          brew install xcodegen
-
-      - name: Resolve project and scheme
-        id: resolve
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          PROJECT_INPUT="${{ inputs.project_path }}"
-          SCHEME_INPUT="${{ inputs.scheme }}"
-          CONFIGURATION="${{ inputs.configuration }}"
-          GENERATE_FROM_XCODEGEN="${{ inputs.generate_from_xcodegen }}"
-
-          if [[ -n "$PROJECT_INPUT" ]]; then
-            PROJECT_PATH="$PROJECT_INPUT"
-            if [[ ! -f "$PROJECT_PATH" ]]; then
-              echo "Provided project_path does not exist: $PROJECT_PATH"
-              exit 1
-            fi
-          else
-            if [[ "$GENERATE_FROM_XCODEGEN" == "true" && -f "project.yml" ]]; then
-              xcodegen generate
-            fi
-
-            PROJECT_PATH=$(find . -name "*.xcodeproj" -not -path "*/Pods/*" | sort | head -n 1)
-            if [[ -z "$PROJECT_PATH" ]]; then
-              echo "No .xcodeproj found. Add one or include project.yml and enable generate_from_xcodegen."
-              exit 1
-            fi
-          fi
-
-          if [[ -n "$SCHEME_INPUT" ]]; then
-            SCHEME="$SCHEME_INPUT"
-          else
-            SCHEME=$(xcodebuild -list -json -project "$PROJECT_PATH" | python3 -c 'import json,sys; data=json.load(sys.stdin); schemes=(data.get("project") or {}).get("schemes") or []; app=[s for s in schemes if not s.lower().endswith("extension")]; print((app or schemes or [""])[0])')
-            if [[ -z "$SCHEME" ]]; then
-              echo "No shared schemes found for project: $PROJECT_PATH"
-              echo "Make sure your target scheme is marked as Shared in Xcode."
-              exit 1
-            fi
-          fi
-
-          APP_NAME=$(basename "$PROJECT_PATH" .xcodeproj)
-
-          echo "project_path=$PROJECT_PATH" >> "$GITHUB_OUTPUT"
-          echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
-          echo "configuration=$CONFIGURATION" >> "$GITHUB_OUTPUT"
-          echo "app_name=$APP_NAME" >> "$GITHUB_OUTPUT"
-
-          {
-            echo "### iOS build inputs"
-            echo "- Project: \`$PROJECT_PATH\`"
-            echo "- Scheme: \`$SCHEME\`"
-            echo "- Configuration: \`$CONFIGURATION\`"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Build app for iPhoneOS (unsigned)
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          PROJECT_PATH="${{ steps.resolve.outputs.project_path }}"
-          SCHEME="${{ steps.resolve.outputs.scheme }}"
-          CONFIGURATION="${{ steps.resolve.outputs.configuration }}"
-
-          xcodebuild \
-            -project "$PROJECT_PATH" \
-            -scheme "$SCHEME" \
-            -configuration "$CONFIGURATION" \
+          xcodebuild clean build \
+            -project PoemOfTheDay.xcodeproj \
+            -scheme PoemOfTheDay \
             -sdk iphoneos \
-            -destination "generic/platform=iOS" \
+            -configuration Release \
             -derivedDataPath build/DerivedData \
+            -destination "generic/platform=iOS" \
             ARCHS=arm64 \
-            ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_ENTITLEMENTS="" \
+            DEVELOPMENT_TEAM="" \
             VALIDATE_PRODUCT=NO \
-            ENABLE_BITCODE=NO \
-            clean build
+            ENABLE_BITCODE=NO
 
-      - name: Package unsigned IPA
-        id: package
-        shell: bash
+      - name: Package IPA
         run: |
           set -euo pipefail
 
-          CONFIGURATION="${{ steps.resolve.outputs.configuration }}"
-          APP_NAME="${{ steps.resolve.outputs.app_name }}"
-
-          APP_DIR="build/DerivedData/Build/Products/${CONFIGURATION}-iphoneos"
-
-          if [[ ! -d "$APP_DIR" ]]; then
-            echo "Expected build output directory not found: $APP_DIR"
+          APP=$(find build/DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -type d | head -1)
+          if [ -z "$APP" ]; then
+            echo "ERROR: No .app bundle found"
+            find build/DerivedData/Build/Products/ -type d
             exit 1
           fi
+          echo "Found app: $APP"
 
-          APP_PATH=""
-          if [[ -d "$APP_DIR/${APP_NAME}.app" ]]; then
-            APP_PATH="$APP_DIR/${APP_NAME}.app"
-          else
-            APP_PATH=$(find "$APP_DIR" -maxdepth 1 -name "*.app" -type d | head -n 1 || true)
-          fi
-
-          if [[ -z "$APP_PATH" || ! -d "$APP_PATH" ]]; then
-            echo "No .app found in $APP_DIR"
-            ls -la "$APP_DIR"
-            exit 1
-          fi
-
-          echo "=== App bundle contents ==="
-          ls -laR "$APP_PATH/" | head -80
+          # Show what we're packaging
+          echo "--- App bundle structure ---"
+          find "$APP" -maxdepth 2 -type f | head -30
           echo ""
 
-          if [[ -d "$APP_PATH/PlugIns" ]]; then
-            echo "=== Embedded extensions ==="
-            ls -la "$APP_PATH/PlugIns/"
-            echo ""
+          # Check for embedded extension
+          if [ -d "$APP/PlugIns" ]; then
+            echo "--- Embedded extensions ---"
+            ls -la "$APP/PlugIns/"
           fi
 
-          # Create clean Payload directory
-          rm -rf build/Payload
-          mkdir -p build/Payload
-          cp -R "$APP_PATH" build/Payload/
+          # Build Payload
+          mkdir -p Payload
+          cp -a "$APP" Payload/
 
-          # Strip ALL code signatures — AltStore will re-sign from scratch
-          find build/Payload -name "_CodeSignature" -type d -exec rm -rf {} + 2>/dev/null || true
-          find build/Payload -name "*.mobileprovision" -delete 2>/dev/null || true
+          # Strip code signatures (AltStore re-signs everything)
+          find Payload -type d -name "_CodeSignature" -exec rm -rf {} + 2>/dev/null || true
+          find Payload -name "*.mobileprovision" -delete 2>/dev/null || true
+          find Payload -name ".DS_Store" -delete 2>/dev/null || true
 
-          # Remove macOS metadata junk
-          find build/Payload -name ".DS_Store" -delete 2>/dev/null || true
-          find build/Payload -name "__MACOSX" -type d -exec rm -rf {} + 2>/dev/null || true
+          # Create IPA with standard zip
+          /usr/bin/zip -r -X PoemOfTheDay.ipa Payload
 
-          # Use standard zip (most compatible with AltStore on all platforms)
-          cd build
-          rm -f PoemOfTheDay.ipa
-          zip -r -9 PoemOfTheDay.ipa Payload
-
+          # Show IPA contents
           echo ""
-          echo "=== IPA contents (first 60 entries) ==="
-          unzip -l PoemOfTheDay.ipa | head -60
+          echo "--- IPA contents ---"
+          unzip -l PoemOfTheDay.ipa | head -40
           echo ""
+          echo "IPA size: $(du -h PoemOfTheDay.ipa | cut -f1)"
 
-          # Validate: IPA must contain Payload/<name>.app/Info.plist
+          # Validate
           if ! unzip -l PoemOfTheDay.ipa | grep -q "Payload/.*\.app/Info.plist"; then
-            echo "ERROR: IPA missing Payload/*.app/Info.plist"
-            unzip -l PoemOfTheDay.ipa
+            echo "FATAL: Invalid IPA — missing Payload/*.app/Info.plist"
             exit 1
           fi
+          echo "IPA validated OK"
 
-          echo "IPA structure validated OK"
-          echo ""
-
-          cd ..
-          mkdir -p dist
-          cp build/PoemOfTheDay.ipa dist/PoemOfTheDay.ipa
-
-          echo "ipa_path=dist/PoemOfTheDay.ipa" >> "$GITHUB_OUTPUT"
-
-          {
-            echo "### Output"
-            echo "- IPA artifact: \`PoemOfTheDay.ipa\`"
-            echo "- App bundle: \`$(basename "$APP_PATH")\`"
-            echo ""
-            echo "This IPA is unsigned and intended for AltStore signing/install flow."
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload IPA artifact
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: ios-widget-ipa
-          path: ${{ steps.package.outputs.ipa_path }}
+          name: PoemOfTheDay
+          path: PoemOfTheDay.ipa
           if-no-files-found: error

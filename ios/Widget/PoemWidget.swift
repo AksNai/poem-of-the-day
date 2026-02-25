@@ -1,120 +1,96 @@
-import AppIntents
 import SwiftUI
 import WidgetKit
+import AppIntents
+
+// MARK: - Timeline Entry
 
 struct PoemEntry: TimelineEntry {
     let date: Date
     let title: String
     let author: String
     let pageText: String
-    let pageIndex: Int
+    let page: Int
     let totalPages: Int
-    let overlayOpacity: Double
-    let hasWallpaper: Bool
 }
+
+// MARK: - Provider
 
 struct PoemProvider: AppIntentTimelineProvider {
     typealias Entry = PoemEntry
     typealias Intent = PoemPageIntent
 
     func placeholder(in context: Context) -> PoemEntry {
-        PoemEntry(
-            date: Date(),
-            title: "Poem of the Day",
-            author: "Unknown",
-            pageText: "This is a placeholder page.",
-            pageIndex: 1,
-            totalPages: 1,
-            overlayOpacity: WidgetAppearanceStore.loadOverlayOpacity(),
-            hasWallpaper: WidgetAppearanceStore.hasWallpaperImage()
-        )
+        PoemEntry(date: .now, title: "Poem of the Day", author: "...",
+                  pageText: "Loading...", page: 1, totalPages: 1)
     }
 
     func snapshot(for configuration: PoemPageIntent, in context: Context) async -> PoemEntry {
-        await makeEntry(for: configuration)
+        await entry(for: configuration)
     }
 
     func timeline(for configuration: PoemPageIntent, in context: Context) async -> Timeline<PoemEntry> {
-        let entry = await makeEntry(for: configuration)
-        let nextRefresh = Calendar.current.date(byAdding: .hour, value: 1, to: Date()) ?? Date().addingTimeInterval(3600)
-        return Timeline(entries: [entry], policy: .after(nextRefresh))
+        let e = await entry(for: configuration)
+        let next = Calendar.current.date(byAdding: .hour, value: 1, to: .now)!
+        return Timeline(entries: [e], policy: .after(next))
     }
 
-    private func makeEntry(for configuration: PoemPageIntent) async -> PoemEntry {
-        let pagedPoem = await PoemStore.loadPagedPoemRemoteFirst()
-        let totalPages = max(1, pagedPoem.pages.count)
-        let requestedPage = max(1, configuration.pageNumber)
-        let page = min(requestedPage, totalPages)
-        let text = pagedPoem.pages[safe: page - 1] ?? pagedPoem.poem.poem
-
-        return PoemEntry(
-            date: Date(),
-            title: pagedPoem.poem.title,
-            author: pagedPoem.poem.author,
-            pageText: text,
-            pageIndex: page,
-            totalPages: totalPages,
-            overlayOpacity: WidgetAppearanceStore.loadOverlayOpacity(),
-            hasWallpaper: WidgetAppearanceStore.hasWallpaperImage()
-        )
+    private func entry(for config: PoemPageIntent) async -> PoemEntry {
+        let paged = await PoemStore.loadPagedPoemRemote()
+        let total = max(1, paged.pages.count)
+        let idx = max(0, min(config.pageNumber - 1, total - 1))
+        let text = paged.pages.indices.contains(idx) ? paged.pages[idx] : paged.poem.poem
+        return PoemEntry(date: .now, title: paged.poem.title, author: paged.poem.author,
+                         pageText: text, page: idx + 1, totalPages: total)
     }
 }
+
+// MARK: - Widget View
 
 struct PoemWidgetView: View {
-    var entry: PoemProvider.Entry
+    var entry: PoemEntry
 
     var body: some View {
-        ZStack {
-            if entry.hasWallpaper, let wallpaper = WidgetAppearanceStore.loadWallpaperImage() {
-                Image(uiImage: wallpaper)
-                    .resizable()
-                    .scaledToFill()
-                Color.black.opacity(entry.overlayOpacity)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(entry.title)
+                .font(.headline)
+                .lineLimit(1)
+
+            Text("by \(entry.author)")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            Divider()
+
+            Text(entry.pageText)
+                .font(.caption)
+                .lineLimit(12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+            HStack {
+                Spacer()
+                Text("\(entry.page)/\(entry.totalPages)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(entry.title)
-                    .font(.headline)
-                    .lineLimit(1)
-                    .foregroundStyle(entry.hasWallpaper ? Color.white : Color.primary)
-
-                Text("by \(entry.author)")
-                    .font(.caption)
-                    .foregroundStyle(entry.hasWallpaper ? Color.white.opacity(0.85) : Color.secondary)
-                    .lineLimit(1)
-
-                Divider()
-
-                Text(entry.pageText)
-                    .font(.caption)
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(12)
-                    .foregroundStyle(entry.hasWallpaper ? Color.white : Color.primary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-
-                HStack {
-                    Spacer()
-                    Text("\(entry.pageIndex)/\(entry.totalPages)")
-                        .font(.caption2)
-                        .foregroundStyle(entry.hasWallpaper ? Color.white.opacity(0.85) : Color.secondary)
-                }
-            }
-            .padding(12)
         }
-        .clipped()
-        .containerBackground(entry.hasWallpaper ? Color.clear : Color(uiColor: .systemBackground), for: .widget)
+        .padding(12)
+        .containerBackground(Color(uiColor: .systemBackground), for: .widget)
     }
 }
 
+// MARK: - Widget & Bundle
+
 struct PoemWidget: Widget {
-    let kind: String = "PoemWidget"
+    let kind = "PoemWidget"
 
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: kind, intent: PoemPageIntent.self, provider: PoemProvider()) { entry in
+        AppIntentConfiguration(kind: kind, intent: PoemPageIntent.self,
+                               provider: PoemProvider()) { entry in
             PoemWidgetView(entry: entry)
         }
         .configurationDisplayName("Poem Page")
-        .description("Shows one page of today's poem. Add multiple pages in a Smart Stack.")
+        .description("Shows one page of today's poem. Stack multiple for scrollable pages.")
         .supportedFamilies([.systemMedium])
     }
 }
@@ -123,11 +99,5 @@ struct PoemWidget: Widget {
 struct PoemWidgetBundle: WidgetBundle {
     var body: some Widget {
         PoemWidget()
-    }
-}
-
-private extension Array {
-    subscript(safe index: Index) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }
