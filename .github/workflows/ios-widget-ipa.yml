@@ -1,6 +1,8 @@
 name: Build iOS IPA
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -58,27 +60,34 @@ jobs:
           plutil -p "$APP/Info.plist" | head -20
           echo ""
 
+          # Check for embedded widget extension
+          echo "--- PlugIns (widget extensions) ---"
+          if [ -d "$APP/PlugIns" ]; then
+            find "$APP/PlugIns" -type d
+          else
+            echo "Warning: No PlugIns directory — widget extension may not be embedded."
+          fi
+          echo ""
+
           # Build Payload structure
           mkdir Payload
           cp -R "$APP" Payload/
 
-          # Clean up anything that might cause signing issues
+          # Clean up code-signing artifacts (will be re-signed by sideload tool)
           find Payload -name "_CodeSignature" -type d -exec rm -rf {} + 2>/dev/null || true
           find Payload -name "*.mobileprovision" -delete 2>/dev/null || true
           find Payload -name ".DS_Store" -delete 2>/dev/null || true
 
-          # Remove PlugIns if any snuck in
-          rm -rf Payload/PoemOfTheDay.app/PlugIns
-
+          # KEEP PlugIns — this is where the widget extension lives!
           echo "--- Payload contents ---"
-          find Payload -type f | head -30
+          find Payload -type f | head -40
           echo ""
 
           # Create IPA
           /usr/bin/zip -r -X PoemOfTheDay.ipa Payload
 
           echo "--- IPA listing ---"
-          unzip -l PoemOfTheDay.ipa | head -30
+          unzip -l PoemOfTheDay.ipa | head -40
           echo ""
           echo "Size: $(du -h PoemOfTheDay.ipa | cut -f1)"
 

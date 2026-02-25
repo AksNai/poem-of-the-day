@@ -1,19 +1,34 @@
 import Foundation
+import WidgetKit
 
 enum PoemStore {
     private static let cacheKey = "cachedPoemJSON"
     static let remoteURL = "https://raw.githubusercontent.com/AksNai/poem-of-the-day/main/poem.json"
 
+    /// App Group identifier shared between main app and widget extension.
+    static let appGroupID = "group.com.aksha.poemoftheday"
+
+    /// Shared UserDefaults accessible by both app and widget.
+    private static var sharedDefaults: UserDefaults {
+        UserDefaults(suiteName: appGroupID) ?? .standard
+    }
+
     // MARK: - Public
 
     static func loadPagedPoem() -> PagedPoem {
-        let poem = loadBundled()
+        // Try cached (shared) first, fall back to bundled.
+        let poem = loadCached() ?? loadBundled()
         return PagedPoem(poem: poem, pages: PoemPaginator.paginate(text: poem.poem))
     }
 
     static func loadPagedPoemRemote() async -> PagedPoem {
         let poem = await remoteFirst()
         return PagedPoem(poem: poem, pages: PoemPaginator.paginate(text: poem.poem))
+    }
+
+    /// Tell WidgetKit to refresh after new data is available.
+    static func reloadWidgetTimelines() {
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     // MARK: - Internal
@@ -58,11 +73,11 @@ enum PoemStore {
 
     private static func cache(_ poem: PoemData) {
         guard let data = try? JSONEncoder().encode(poem) else { return }
-        UserDefaults.standard.set(data, forKey: cacheKey)
+        sharedDefaults.set(data, forKey: cacheKey)
     }
 
     private static func loadCached() -> PoemData? {
-        guard let data = UserDefaults.standard.data(forKey: cacheKey) else { return nil }
+        guard let data = sharedDefaults.data(forKey: cacheKey) else { return nil }
         return decode(data)
     }
 }

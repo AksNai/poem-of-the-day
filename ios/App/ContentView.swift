@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 struct ContentView: View {
     @State private var pagedPoem = PoemStore.loadPagedPoem()
@@ -39,7 +40,10 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        Task { pagedPoem = await PoemStore.loadPagedPoemRemote() }
+                        Task {
+                            pagedPoem = await PoemStore.loadPagedPoemRemote()
+                            PoemStore.reloadWidgetTimelines()
+                        }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
@@ -47,6 +51,7 @@ struct ContentView: View {
             }
             .task {
                 pagedPoem = await PoemStore.loadPagedPoemRemote()
+                PoemStore.reloadWidgetTimelines()
             }
         }
     }

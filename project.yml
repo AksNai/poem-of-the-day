@@ -15,6 +15,7 @@ schemes:
     build:
       targets:
         PoemOfTheDay: all
+        PoemWidgetExtension: all
     run:
       config: Debug
     archive:
@@ -34,3 +35,30 @@ targets:
         INFOPLIST_FILE: ios/App/Info.plist
         GENERATE_INFOPLIST_FILE: "NO"
         TARGETED_DEVICE_FAMILY: "1,2"
+    entitlements:
+      path: ios/App/PoemOfTheDay.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.aksha.poemoftheday
+    dependencies:
+      - target: PoemWidgetExtension
+
+  PoemWidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ios/Widget
+      - path: ios/Shared
+    resources:
+      - path: poem.json
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aksha.poemoftheday.widget
+        INFOPLIST_FILE: ios/Widget/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        TARGETED_DEVICE_FAMILY: "1,2"
+    entitlements:
+      path: ios/Widget/PoemWidgetExtension.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.aksha.poemoftheday
