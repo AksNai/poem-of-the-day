@@ -28,6 +28,14 @@ schemes:
       config: Debug
     archive:
       config: Release
+  PoemOfTheDayAppOnly:
+    build:
+      targets:
+        PoemOfTheDayAppOnly: all
+    run:
+      config: Debug
+    archive:
+      config: Release
 targets:
   PoemOfTheDay:
     type: application
@@ -40,6 +48,21 @@ targets:
     dependencies:
       - target: PoemWidgetExtension
         embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aksha.poemoftheday
+        INFOPLIST_FILE: ios/App/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "NO"
+  PoemOfTheDayAppOnly:
+    type: application
+    platform: iOS
+    sources:
+      - path: ios/App
+      - path: ios/Shared
+    resources:
+      - path: poem.json
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.aksha.poemoftheday

@@ -28,7 +28,7 @@ jobs:
         run: |
           xcodebuild clean build \
             -project PoemOfTheDay.xcodeproj \
-            -scheme PoemOfTheDay \
+            -scheme PoemOfTheDayAppOnly \
             -sdk iphoneos \
             -configuration Release \
             -derivedDataPath build/DerivedData \
@@ -68,6 +68,9 @@ jobs:
           # Build Payload
           mkdir -p Payload
           cp -a "$APP" Payload/
+
+          # Remove PlugIns if present (no extensions in app-only build)
+          rm -rf Payload/*.app/PlugIns
 
           # Strip code signatures (AltStore re-signs everything)
           find Payload -type d -name "_CodeSignature" -exec rm -rf {} + 2>/dev/null || true
