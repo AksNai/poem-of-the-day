@@ -8,6 +8,7 @@ struct PoemEntry: TimelineEntry {
     let title: String
     let author: String
     let excerpt: String          // fits the current widget size
+    let epigraph: String?        // dedication / epigraph (e.g. "(for Harlem Magic)")
     let pageIndex: Int
     let totalPages: Int
 }
@@ -22,8 +23,7 @@ struct PoemTimelineProvider: TimelineProvider {
             date: .now,
             title: "Poem of the Day",
             author: "Loading…",
-            excerpt: "A new poem every day\nright on your home screen.",
-            pageIndex: 1,
+            excerpt: "A new poem every day\nright on your home screen.",            epigraph: nil,            pageIndex: 1,
             totalPages: 1
         )
     }
@@ -52,6 +52,7 @@ struct PoemTimelineProvider: TimelineProvider {
             title: paged.poem.title,
             author: paged.poem.author,
             excerpt: page,
+            epigraph: paged.poem.epigraph,
             pageIndex: 1,
             totalPages: paged.pages.count
         )
@@ -87,6 +88,12 @@ struct PoemWidgetEntryView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+            if let epi = entry.epigraph, !epi.isEmpty {
+                MarkdownRenderer.epigraphText(from: epi)
+                    .font(.caption)
+                    .padding(.leading, 10)
+                    .lineLimit(1)
+            }
             Spacer(minLength: 2)
             MarkdownRenderer.text(from: entry.excerpt)
                 .font(.caption2)
@@ -119,6 +126,12 @@ struct PoemWidgetEntryView: View {
                         .foregroundStyle(.tertiary)
                 }
             }
+            if let epi = entry.epigraph, !epi.isEmpty {
+                MarkdownRenderer.epigraphText(from: epi)
+                    .font(.footnote)
+                    .padding(.leading, 16)
+                    .lineLimit(1)
+            }
             Divider()
             MarkdownRenderer.text(from: entry.excerpt)
                 .font(.caption)
@@ -150,6 +163,12 @@ struct PoemWidgetEntryView: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
+            }
+            if let epi = entry.epigraph, !epi.isEmpty {
+                MarkdownRenderer.epigraphText(from: epi)
+                    .font(.title3)
+                    .padding(.leading, 20)
+                    .lineLimit(2)
             }
             Divider()
             MarkdownRenderer.text(from: entry.excerpt)
@@ -187,8 +206,7 @@ struct PoemOfTheDayWidget: Widget {
     PoemOfTheDayWidget()
 } timeline: {
     PoemEntry(date: .now, title: "The Road Not Taken", author: "Robert Frost",
-              excerpt: "Two roads diverged in a yellow wood,\nAnd sorry I could not travel both…",
-              pageIndex: 1, totalPages: 2)
+              excerpt: "Two roads diverged in a yellow wood,\nAnd sorry I could not travel both…",              epigraph: nil,              pageIndex: 1, totalPages: 2)
 }
 
 #Preview("Medium", as: .systemMedium) {
@@ -196,6 +214,7 @@ struct PoemOfTheDayWidget: Widget {
 } timeline: {
     PoemEntry(date: .now, title: "The Road Not Taken", author: "Robert Frost",
               excerpt: "Two roads diverged in a yellow wood,\nAnd sorry I could not travel both\nAnd be one traveler, long I stood\nAnd looked down one as far as I could\nTo where it bent in the undergrowth;",
+              epigraph: nil,
               pageIndex: 1, totalPages: 2)
 }
 
@@ -204,6 +223,7 @@ struct PoemOfTheDayWidget: Widget {
 } timeline: {
     PoemEntry(date: .now, title: "The Road Not Taken", author: "Robert Frost",
               excerpt: "Two roads diverged in a yellow wood,\nAnd sorry I could not travel both\nAnd be one traveler, long I stood\nAnd looked down one as far as I could\nTo where it bent in the undergrowth;\n\nThen took the other, as just as fair,\nAnd having perhaps the better claim,\nBecause it was grassy and wanted wear;\nThough as for that the passing there\nHad worn them really about the same,",
+              epigraph: nil,
               pageIndex: 1, totalPages: 2)
 }
 #endif

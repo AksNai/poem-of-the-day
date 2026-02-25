@@ -25,4 +25,10 @@ enum MarkdownRenderer {
     static func text(from markdown: String) -> Text {
         Text(attributedString(from: markdown))
     }
+
+    /// Render an epigraph (dedication) with italic styling.
+    @ViewBuilder
+    static func epigraphText(from epigraph: String) -> Text {
+        Text(attributedString(from: "_\(epigraph)_"))
+    }
 }

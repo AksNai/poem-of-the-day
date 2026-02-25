@@ -76,6 +76,15 @@
         word-wrap: break-word;
       }
 
+      .epigraph {
+        font-size: 1.25rem;
+        font-style: italic;
+        line-height: 1.6;
+        padding-left: 1.5rem;
+        margin-bottom: 1.5em;
+        white-space: pre-wrap;
+      }
+
       .poem-body em {
         font-style: italic;
       }
@@ -94,6 +103,7 @@
       @media (max-width: 480px) {
         body { padding: 2rem 1rem; }
         h1 { font-size: 1.35rem; }
+        .epigraph { font-size: 1.1rem; padding-left: 1rem; }
         .poem-body { font-size: 0.95rem; line-height: 1.65; }
       }
     </style>
@@ -105,12 +115,14 @@
         <h1 id="poem-title"></h1>
         <p class="author" id="poem-author"></p>
       </div>
+      <div class="epigraph" id="poem-epigraph"></div>
       <div class="poem-body" id="poem-text"></div>
     </main>
 
     <script>
       const poemTitle = document.getElementById("poem-title");
       const poemAuthor = document.getElementById("poem-author");
+      const poemEpigraph = document.getElementById("poem-epigraph");
       const poemText = document.getElementById("poem-text");
 
       /**
@@ -174,6 +186,15 @@
 
           poemTitle.textContent = data.title || "Untitled";
           poemAuthor.textContent = data.author ? `by ${data.author}` : "";
+
+          // Epigraph / dedication (e.g. "(for Harlem Magic)")
+          if (data.epigraph) {
+            poemEpigraph.textContent = data.epigraph;
+            poemEpigraph.style.display = "block";
+          } else {
+            poemEpigraph.style.display = "none";
+          }
+
           poemText.innerHTML = renderPoem(data.poem);
         })
         .catch(() => {

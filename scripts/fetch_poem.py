@@ -392,14 +392,20 @@ def extract_poem_from_nuxt(page_html: str) -> str | None:
     if not body:
         return None
 
-    # 4. Combine: epigraph + body (if epigraph not already in body)
+    # 4. Return body and epigraph separately
+    result = {"body": body}
     if epigraph:
         # Check the epigraph text isn't already embedded in the body
         plain_epi = epigraph.replace("_", "").replace("*", "").strip()
         if plain_epi not in body.replace("_", "").replace("*", ""):
-            body = epigraph + "\n\n" + body
+            # Strip the outer italic markers — the epigraph field is
+            # semantically "this is an epigraph"; rendering decides style.
+            epi_clean = epigraph.strip()
+            if epi_clean.startswith("_") and epi_clean.endswith("_"):
+                epi_clean = epi_clean[1:-1].strip()
+            result["epigraph"] = epi_clean
 
-    return body
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -594,13 +600,16 @@ def main() -> None:
     data = None
     page_html = fetch_html(poem_url)
     if page_html:
-        nuxt_body = extract_poem_from_nuxt(page_html)
-        if nuxt_body:
+        nuxt_result = extract_poem_from_nuxt(page_html)
+        if nuxt_result:
+            nuxt_body = nuxt_result["body"]
             data = {
                 "title": jina_data["title"],
                 "author": jina_data["author"],
                 "poem": nuxt_body,
             }
+            if nuxt_result.get("epigraph"):
+                data["epigraph"] = nuxt_result["epigraph"]
             if is_valid(data):
                 print("  (used NUXT HTML for rich formatting)")
             else:

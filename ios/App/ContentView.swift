@@ -16,6 +16,14 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                     }
 
+                    // Epigraph / dedication (e.g. "(for Harlem Magic)")
+                    if let epigraph = pagedPoem.poem.epigraph, !epigraph.isEmpty {
+                        MarkdownRenderer.epigraphText(from: epigraph)
+                            .font(.title3)
+                            .padding(.leading, 24)
+                            .padding(.top, 4)
+                    }
+
                     Text("\(pagedPoem.pages.count) page\(pagedPoem.pages.count == 1 ? "" : "s")")
                         .font(.caption)
                         .foregroundStyle(.secondary)
